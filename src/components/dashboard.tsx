@@ -144,6 +144,12 @@ export default function Dashboard() {
     const sidebar = document.getElementById("workspace-navigation");
     sidebar?.querySelector<HTMLElement>(".nav.active")?.focus();
     const handleKey = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        (event.target instanceof Element &&
+          event.target.closest("dialog[open]"))
+      )
+        return;
       if (event.key === "Escape") {
         event.preventDefault();
         setNavigationOpen(false);
@@ -811,7 +817,6 @@ export default function Dashboard() {
           enabled={!!data?.viewer.userId && !busy}
           currentId={data?.viewer.workspaceId ?? "main"}
           onChanged={async (id) => {
-            setNavigationOpen(false);
             accountGeneration.current++;
             workspaceRef.current = id;
             setData(null);
@@ -831,6 +836,7 @@ export default function Dashboard() {
             setModal(null);
             setTab(tabs[0]);
             await load();
+            setNavigationOpen(false);
           }}
         />
         <nav aria-label="워크스페이스 메뉴">

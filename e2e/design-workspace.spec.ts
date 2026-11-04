@@ -203,3 +203,48 @@ test("모바일 메뉴는 본문을 가리지 않고 키보드로 열고 닫을 
     ),
   ).toBeTruthy();
 });
+
+test("모바일 워크스페이스 창의 Esc는 먼저 창을 닫고 메뉴를 유지한다", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/dashboard", async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    data.viewer.userId = "navigation-review";
+    await route.fulfill({ response, json: data });
+  });
+  await page.route("**/api/auth/workspaces", (route) =>
+    route.fulfill({
+      json: {
+        currentId: "main",
+        workspaces: [{ id: "main", name: "제품 개발", role: "owner" }],
+      },
+    }),
+  );
+  await page.goto("/");
+  const trigger = page.getByRole("button", { name: "메뉴 열기", exact: true });
+  await trigger.click();
+  await page
+    .getByRole("button", { name: "워크스페이스 선택 및 생성", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "워크스페이스 선택 및 생성",
+    exact: true,
+  });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  expect(
+    await page
+      .locator("dialog.workspace-dialog")
+      .evaluate((element) => (element as HTMLDialogElement).open),
+  ).toBe(false);
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(
+    page.getByRole("button", { name: "PRD 관리", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(trigger).toBeFocused();
+});
