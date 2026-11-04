@@ -57,12 +57,16 @@ test("정책과 용어집을 작성·편집·검색하고 PRD에서 참조한다
   await page.getByRole("button", { name: "＋ PRD 작성" }).click();
   const prd = page.getByRole("dialog", { name: "PRD 작성", exact: true });
   await prd.getByLabel("기능명", { exact: true }).fill(`정책 연결 ${suffix}`);
-  await prd
-    .getByLabel("관련 정책", { exact: true })
-    .selectOption({ label: policyName });
-  await prd
-    .getByLabel("관련 용어", { exact: true })
-    .selectOption({ label: termName });
+  const policies = prd.getByRole("group", { name: "관련 정책", exact: true });
+  await policies
+    .getByRole("button", { name: "정책 선택", exact: true })
+    .click();
+  await policies
+    .getByRole("checkbox", { name: policyName, exact: true })
+    .check();
+  const terms = prd.getByRole("group", { name: "관련 용어", exact: true });
+  await terms.getByRole("button", { name: "용어 선택", exact: true }).click();
+  await terms.getByRole("checkbox", { name: termName, exact: true }).check();
   await prd.getByRole("button", { name: "PRD 저장" }).click();
   await expect(prd).not.toBeVisible();
   await page.getByRole("button", { name: "전체 열 보기", exact: true }).click();

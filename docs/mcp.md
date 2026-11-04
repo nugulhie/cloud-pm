@@ -173,3 +173,5 @@ Asana 동명 사용자 지정 CSV 열은 각각 보존하며 기본 담당자와
 `get_knowledge_impact`는 읽기 토큰으로 사용할 수 있다. 예: `{"id":"policy-security","kind":"issues","project":"customer-platform","limit":40,"offset":0}`. `list_knowledge`에서 문서 ID를 찾은 뒤 PRD·태스크·이슈·PR 중 하나를 선택해 조회한다. 응답의 `summary`와 `references`로 영향을 검토하고, `page.nextOffset`이 있으면 다음 페이지를 요청한다.
 
 PRD의 정책·용어 참조와 하위 태스크·승인된 GitHub 연결을 따른다. 같은 이슈는 중복 집계하지 않는다. 원본이 캐시에 없는 발행 이슈는 `unknown` 상태이며, 정책 편집이 관련 원문을 자동 변경하거나 검토 완료를 뜻하지는 않는다. [API 계약과 권한 규칙](knowledge-impact.md)을 함께 확인한다.
+
+정책 의존관계는 `save_knowledge`의 `dependsOn` 또는 `update_knowledge_fields`의 `patch.dependsOn`으로 등록한다. 예: 환불 정책이 결제 정책을 따르면 환불 정책의 `dependsOn`에 결제 정책 ID를 넣는다. 생략은 유지, `[]`는 해제다. 순환·자기 참조·다른 워크스페이스·용어 연결은 거절한다. `get_knowledge_impact`의 기본 `scope=all`은 의존 정책의 PRD·작업도 집계한다. `scope=direct`는 직접 참조만, `kind=policies`는 의존 정책을 페이지로 조회한다. `policyPath`와 `policyDistance`로 간접 연결 근거를 확인한다.

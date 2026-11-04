@@ -6,12 +6,12 @@
 
 - `GET /api/knowledge/impact?id=<문서 ID>&kind=requirements&limit=40&offset=0`
 - MCP 읽기 도구: `get_knowledge_impact`. HTTP와 같은 입력·응답을 사용한다.
-- `kind`: `requirements`(기본값), `tasks`, `issues`, `prs`.
+- `kind`: `requirements`(기본값), `tasks`, `issues`, `prs`, `policies`.
 - 선택 입력 `project`: 현재 접근 가능한 프로젝트 ID. 해당 프로젝트로 집계와 목록을 좁힌다.
 - `offset`: 0 이상의 정수, 기본 0. `limit`: 1–100 정수, 기본 40.
 - 인증은 기존 세션 또는 MCP/API 토큰을 사용한다. 쓰기 권한은 필요하지 않다. HTTP 응답은 `Cache-Control: no-store`다.
 
-성공 응답에는 `document`(id, kind, name, revision, updatedAt), `summary`(requirements, tasks, issues, prs, projects), `projects`(관련 프로젝트 선택지), `kind`, `project`, `page`(items, total, offset, limit, hasMore, nextOffset)가 포함된다.
+성공 응답에는 `document`(id, kind, name, revision, updatedAt), `summary`(requirements, tasks, issues, prs, policies, projects), `projects`(관련 프로젝트 선택지), `kind`, `project`, `page`(items, total, offset, limit, hasMore, nextOffset)가 포함된다.
 
 목록 항목은 `id`, `kind`, `title`, `label`, `status`, `assignees`, `updatedAt`, `projects`, `references`, `referenceCount`를 포함한다. GitHub 항목에는 `repository`, `number`, `url`이 추가된다. `references`는 PRD ID·번호·기능명·프로젝트와 연결 경로(`prd`, `task`, `subtask`, `published_issue`)를 최대 5개 제공한다. 전체 경로 수는 `referenceCount`다. 큰 본문과 파일 diff는 반환하지 않는다. 최종 활동 시각 내림차순, ID 순으로 정렬한다.
 
@@ -32,4 +32,19 @@
 
 정책·용어 카드의 **연결·영향 보기**를 누른다. PRD와 태스크 제목에서 상세로 이동할 수 있고 GitHub 항목은 원문을 새 창으로 연다. 기존 문서의 편집 화면에도 동일한 검토 목록을 표시한다. 편집 중인 내용을 보존하도록 편집 화면 안의 목록은 조회 용도로 사용한다.
 
-그래프·집계·권한·페이지·MCP 회귀 검사 4개와 HTTP 인증·읽기 토큰·캐시·오류 계약 검사 1개를 추가했다. 전체 자동 검사 180개와 별도 HTTP 검사 1개가 통과했다. 운영용 빌드와 격리된 로컬 계정으로 브라우저 검사 3개를 통과했다. 프로젝트 필터, 40개 단위 페이지, PRD 상세 이동, 정책 변경 후 조회, 하위 작업·PR 근거, 재시도·빈 목록, 용어 참조와 390px 가로 넘침을 확인했다. 실제 GitHub 원문 변경은 수행하지 않았다.
+전체 자동 검사 186개가 통과했다. 정책 의존관계 검사 5개는 생략 보존·해제, 순환·자기 참조·잘못된 문서, 삭제 보호, 동시 연결, 간접 PRD·하위 작업·이슈 집계, 조회 범위·권한, MCP 수정·읽기 조회, 긴 경로·과거 순환 데이터를 다룬다. HTTP 인증·읽기 토큰·캐시·오류 계약도 확인했다.
+
+운영용 빌드와 격리된 로컬 계정으로 브라우저 검사 5개를 통과했다. 체크박스 추가·해제, 검색·접기 후 선택 보존, 10개 제한, 기준 정책 등록, 간접 PRD와 의존 정책 조회, 경로·범위·정책 이동, 모바일 가로 넘침과 기존 정책·용어 흐름을 확인했다. PostgreSQL 18에서도 반대 연결 동시 저장과 삭제·참조 동시 요청 검사를 통과했다. 검사는 로컬 격리 데이터로 수행했으며 실제 GitHub 원문을 변경하지 않았다.
+
+## 정책 의존관계 확장
+
+정책 저장 입력에 선택 항목 `dependsOn: string[]`(최대 50개)를 추가한다. `A.dependsOn=[B]`는 A가 B를 기준으로 삼는다는 뜻이다. B의 변경 영향에는 B를 직접 참조한 PRD와 A를 참조한 PRD가 포함된다. A를 조회할 때 B만 참조한 PRD를 반대로 포함하지 않는다. 여러 단계를 같은 방향으로 추적하고 같은 PRD·태스크·이슈·PR은 한 번만 집계한다.
+
+- 기존 저장·수정 API와 MCP `save_knowledge`, `update_knowledge_fields`를 사용한다. 필드 생략 시 기존 연결을 보존하고 `[]`로 해제한다. 이전 데이터에서 필드가 없으면 의존관계 없음으로 처리한다.
+- 현재 워크스페이스의 정책만 연결한다. 자기 자신, 없는 문서, 용어, 순환 의존은 400으로 거절한다. 수정 충돌은 기존 409 규칙을 유지한다. 다른 정책이 의존하는 문서는 삭제를 막고 연결 해제 또는 사용 중단을 안내한다.
+- 영향 조회에 `scope=all|direct`를 추가한다(기본 `all`). `all`은 직접 참조와 이 정책에 의존하는 정책의 간접 참조를 함께 집계한다. `direct`는 선택한 문서의 직접 PRD 참조만 집계한다. 용어는 두 범위 모두 기존 직접 참조 규칙을 따른다.
+- `kind=policies`로 이 정책을 따르는 정책도 같은 페이지 규칙으로 조회한다. `summary.policies`가 추가된다. 프로젝트를 지정하면 해당 프로젝트의 관련 PRD가 참조한 정책만 표시한다.
+- 응답의 `policyRelations`에는 선택 정책이 직접 따르는 정책(`dependencies`: id, name)과 이 정책에 직·간접으로 의존하는 정책 수(`dependentCount`)가 포함된다. 용어는 `null`이다.
+- 정책을 통한 연결 근거에는 `policyPath`(참조한 정책부터 선택 정책까지), `policyDistance`(의존 단계 수), `policyPathTruncated`를 제공한다. 여러 경로가 있으면 한 개의 최단 경로를 제시한다. 긴 경로는 시작 부분과 끝을 합쳐 최대 8개 정책으로 표시하고 생략 여부를 명시한다. 기존 근거 최대 5개 제한을 유지한다.
+
+웹 PRD의 관련 정책·용어는 검색 가능한 체크박스 선택기로 변경한다. 선택된 항목은 버튼으로 바로 해제할 수 있고 검색·목록 접기 후에도 선택을 보존한다. 정책 편집에도 같은 선택기를 사용하며 변경 사항은 각 폼을 저장하면 적용된다. 의존관계 등록은 PRD의 직접 선택 목록이나 GitHub 원문을 자동 변경하지 않는다.

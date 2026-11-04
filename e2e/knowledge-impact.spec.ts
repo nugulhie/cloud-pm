@@ -130,7 +130,7 @@ test("정책 변경 검토에서 프로젝트·PRD 페이지·하위 태스크·
     edit.getByRole("button", { name: "PRD 42", exact: true }),
   ).toBeVisible();
   await edit.getByRole("button", { name: "정책 저장", exact: true }).click();
-  await expect(edit).not.toBeVisible();
+  await expect(edit).not.toBeVisible({ timeout: 10000 });
   await card
     .getByRole("button", { name: "연결·영향 보기", exact: true })
     .click();

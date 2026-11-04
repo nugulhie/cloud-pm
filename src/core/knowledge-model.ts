@@ -10,6 +10,7 @@ export const knowledgeInput = z.strictObject({
   owner: z.string().trim().max(100).default(""),
   remarks: z.string().max(2000).default(""),
   status: z.enum(["draft", "active", "deprecated"]).default("draft"),
+  dependsOn: z.array(id).max(50).optional(),
 });
 export type KnowledgeEntry = z.infer<typeof knowledgeInput> & {
   editor: string;

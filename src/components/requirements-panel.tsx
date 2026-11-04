@@ -13,6 +13,7 @@ import {
 import type { Stored, Project, Feature, Task } from "../core/model";
 import MarkdownBody from "./markdown-body";
 import type { KnowledgeEntry } from "../core/knowledge-model";
+import ReferencePicker from "./reference-picker";
 
 export { default as EditorDialog } from "./editor-dialog";
 export default function RequirementsPanel({
@@ -577,42 +578,26 @@ export default function RequirementsPanel({
                   defaultValue={editing?.data.remarks}
                 />
               </label>
-              <div className="form-grid">
-                <label>
-                  관련 정책 (최대 10개)
-                  <select
-                    name="policyIds"
-                    multiple
-                    defaultValue={editing?.data.policyIds ?? []}
-                    aria-label="관련 정책"
-                  >
-                    {knowledge
-                      .filter((r) => r.data.kind === "policy")
-                      .map((r) => (
-                        <option key={r.data.id} value={r.data.id}>
-                          {r.data.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label>
-                  관련 용어 (최대 10개)
-                  <select
-                    name="glossaryIds"
-                    multiple
-                    defaultValue={editing?.data.glossaryIds ?? []}
-                    aria-label="관련 용어"
-                  >
-                    {knowledge
-                      .filter((r) => r.data.kind === "glossary")
-                      .map((r) => (
-                        <option key={r.data.id} value={r.data.id}>
-                          {r.data.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-              </div>
+              <ReferencePicker
+                key={`policy-${editing?.data.id ?? "new"}`}
+                name="policyIds"
+                label="관련 정책"
+                buttonLabel="정책 선택"
+                initial={editing?.data.policyIds}
+                options={knowledge
+                  .filter((r) => r.data.kind === "policy")
+                  .map((r) => r.data)}
+              />
+              <ReferencePicker
+                key={`glossary-${editing?.data.id ?? "new"}`}
+                name="glossaryIds"
+                label="관련 용어"
+                buttonLabel="용어 선택"
+                initial={editing?.data.glossaryIds}
+                options={knowledge
+                  .filter((r) => r.data.kind === "glossary")
+                  .map((r) => r.data)}
+              />
               <div className="form-grid">
                 <label>
                   상태

@@ -5667,3 +5667,128 @@ main > header {
 .prd-dialog:has(> .knowledge-impact) > .section-title .icon-button {
   flex-shrink: 0;
 }
+
+/* 정책·용어를 체크하고 선택 버튼에서 바로 해제한다. */
+.reference-picker {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin: 0;
+  padding: 12px;
+  min-width: 0;
+}
+.reference-picker legend {
+  padding: 0 5px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.reference-picker legend .muted {
+  font-weight: 400;
+  margin-left: 6px;
+}
+.reference-selected,
+.reference-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.reference-selected {
+  margin: 5px 0 10px;
+}
+.reference-chip {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid #c7e1d8;
+  background: var(--soft);
+  color: #1d6c5e;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.reference-chip span {
+  flex-shrink: 0;
+}
+.reference-actions > button {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.reference-options {
+  margin-top: 12px;
+}
+.reference-options > input {
+  width: 100%;
+}
+.reference-checkboxes {
+  max-height: 250px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 10px 0;
+}
+.reference-picker .reference-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 5px;
+  margin: 0;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line);
+}
+.reference-picker .reference-option input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  flex-shrink: 0;
+  accent-color: var(--green);
+}
+.reference-option > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.reference-option strong {
+  font-weight: 500;
+}
+.reference-option small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+.reference-option:has(input:checked) {
+  background: var(--soft);
+}
+.reference-option:has(input:disabled:not(:checked)) {
+  opacity: 0.65;
+}
+.impact-policy-relations {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 12px 0;
+}
+.impact-policy-relations p {
+  margin: 4px 0 8px;
+}
+.policy-dependency-preview {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 720px) {
+  .reference-actions > button,
+  .reference-chip {
+    min-height: 40px;
+  }
+}
+.impact-policy-relations > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.impact-policy-relations[open] > summary {
+  margin-bottom: 12px;
+}

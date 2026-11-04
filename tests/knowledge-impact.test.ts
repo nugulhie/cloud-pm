@@ -101,6 +101,7 @@ const link = (
   });
 function fixture(): KnowledgeImpactData {
   return {
+    knowledge: [document],
     projects: [
       stored<Project>({
         id: "p",
@@ -179,6 +180,7 @@ test("명시적 PRD 참조·하위 작업·승인 연결을 집계하고 중복 
     tasks: 3,
     issues: 1,
     prs: 1,
+    policies: 0,
     projects: 1,
   });
   assert.equal(result.projects.length, 2);
@@ -331,6 +333,7 @@ test("Service와 읽기 전용 MCP가 프로젝트·과거 발행 저장소·워
       tasks: 3,
       issues: 1,
       prs: 1,
+      policies: 0,
       projects: 1,
     });
     assert.ok(!JSON.stringify(impact).includes("private"));

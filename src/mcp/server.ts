@@ -31,7 +31,7 @@ export function createMcpServer(service: Service) {
     "get_knowledge_impact",
     {
       description:
-        "정책·용어를 참조하는 PRD와 하위 태스크·승인된 이슈·PR의 변경 검토 대상 조회. 원본을 수정하지 않으며 실제 반영 여부를 판정하지 않는다. kind와 project로 좁히고 offset/limit로 페이지를 조회한다.",
+        "정책·용어의 변경 검토 대상 조회. 정책에 의존하는 정책을 따라 관련 PRD·하위 태스크·승인된 이슈·PR도 집계한다. scope=direct는 직접 참조만, 기본 all은 간접 참조도 포함한다. kind=policies로 의존 정책과 경로 조회. project와 offset/limit 지원. 원본을 수정하지 않는다.",
       inputSchema: knowledgeImpactQuery.shape,
       annotations: read,
     },
@@ -95,7 +95,7 @@ export function createMcpServer(service: Service) {
       "save_knowledge",
       {
         description:
-          "정책·용어집 항목 작성·수정. 편집자·일시는 자동 기록. 수정 시 revision 필요.",
+          "정책·용어집 작성·수정. 정책의 dependsOn에 기준이 되는 정책 ID를 지정한다(최대 50개). 생략하면 기존 연결 유지, []로 해제. 순환·자기 참조는 거절. 편집자·일시는 자동 기록. 수정 시 revision 필요.",
         inputSchema: {
           data: knowledgeInput,
           revision: z.number().int().positive().optional(),
@@ -107,7 +107,7 @@ export function createMcpServer(service: Service) {
     server.registerTool(
       "delete_knowledge",
       {
-        description: "PRD에서 참조하지 않는 정책·용어 삭제",
+        description: "PRD나 다른 정책이 참조하지 않는 정책·용어 삭제",
         inputSchema: { id: z.string(), revision: z.number().int().positive() },
         annotations: { destructiveHint: true },
       },

@@ -236,7 +236,8 @@ export async function changeHistory(
           JSON.stringify(v[key]) !== JSON.stringify(row.previous?.[key]),
       )
       .map(([key, label]) => ({
-        field: label,
+        field:
+          row.kind === "knowledge" && key === "dependsOn" ? "의존 정책" : label,
         before: [
           "body",
           "description",

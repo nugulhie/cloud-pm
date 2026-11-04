@@ -50,6 +50,7 @@ test("영향 조회 HTTP 계약: 인증·읽기 토큰·no-store·입력 오류�
       "id=policy&kind=all",
       "id=policy&offset=-1",
       "id=policy&extra=unsupported",
+      "id=policy&scope=both",
     ])
       assert.equal((await get(query)).status, 400, query);
     assert.equal((await get("id=missing")).status, 404);
@@ -60,6 +61,49 @@ test("영향 조회 HTTP 계약: 인증·읽기 토큰·no-store·입력 오류�
         await store.query<{ n: number }>("SELECT count(*)::int n FROM events")
       )[0]!.n,
       1,
+    );
+    await store.save(
+      "knowledge",
+      "child",
+      { ...document, id: "child", name: "하위 정책", dependsOn: ["policy"] },
+      "pm",
+    );
+    await store.save(
+      "project",
+      "p",
+      {
+        id: "p",
+        name: "제품",
+        goal: "",
+        featurePrefix: "ABCDE",
+        repositories: [],
+      },
+      "pm",
+    );
+    await store.save(
+      "requirement",
+      "r",
+      {
+        id: "r",
+        project: "p",
+        number: 1,
+        featureName: "연결 PRD",
+        status: "draft",
+        policyIds: ["child"],
+      },
+      "pm",
+    );
+    const indirect = await (await get("id=policy")).json();
+    assert.equal(indirect.summary.requirements, 1);
+    assert.equal(indirect.summary.policies, 1);
+    assert.equal(indirect.page.items[0].references[0].policyDistance, 1);
+    assert.equal(
+      (await (await get("id=policy&scope=direct")).json()).page.total,
+      0,
+    );
+    assert.equal(
+      (await (await get("id=policy&kind=policies")).json()).page.items[0].id,
+      "child",
     );
   } finally {
     global.pmStore = previous;

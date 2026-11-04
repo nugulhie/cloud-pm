@@ -12,6 +12,7 @@ import { Collaboration, type TaskComment } from "./collaboration";
 import { Workspaces } from "../workspaces/service";
 import { knowledgeInput, type KnowledgeEntry } from "./knowledge-model";
 import { knowledgeImpact, knowledgeImpactQuery } from "./knowledge-impact";
+import { validatePolicyDependencies } from "./policy-dependencies";
 import { changeHistory } from "./history";
 import { acquireSyncLease } from "../jobs/lease";
 import { SyncQueue } from "../jobs/queue";
@@ -88,6 +89,11 @@ export class Service {
     requireWrite(this.actor);
     const value = knowledgeInput.parse(input);
     return this.withTaskGraph(async (service) => {
+      await service.store.query(
+        "SELECT id FROM records WHERE workspace_id=$1 AND kind='knowledge' ORDER BY id FOR UPDATE",
+        [service.store.workspaceId],
+      );
+      const documents = await service.store.list<KnowledgeEntry>("knowledge");
       const old = await service.store.get<KnowledgeEntry>(
         "knowledge",
         value.id,
@@ -96,7 +102,7 @@ export class Service {
         throw new DomainError("문서 종류는 변경할 수 없습니다.");
       if (
         value.kind === "glossary" &&
-        (await service.store.list<KnowledgeEntry>("knowledge")).some(
+        documents.some(
           (r) =>
             r.data.id !== value.id &&
             r.data.kind === "glossary" &&
@@ -112,6 +118,11 @@ export class Service {
         value.id,
         {
           ...value,
+          dependsOn: validatePolicyDependencies(
+            value,
+            value.dependsOn ?? old?.data.dependsOn ?? [],
+            documents,
+          ),
           aliases: [...new Set(value.aliases)],
           editor: this.actor.name,
         },
@@ -153,8 +164,23 @@ export class Service {
       .strictObject({ id: z.string(), revision: z.number().int().positive() })
       .parse(input);
     return this.withTaskGraph(async (service) => {
+      await service.store.query(
+        "SELECT id FROM records WHERE workspace_id=$1 AND kind='knowledge' ORDER BY id FOR UPDATE",
+        [service.store.workspaceId],
+      );
       if (!(await service.store.get("knowledge", entry.id)))
         throw new DomainError("문서가 없습니다.", 404);
+      if (
+        (await service.store.list<KnowledgeEntry>("knowledge")).some(
+          (r) =>
+            r.data.id !== entry.id &&
+            r.data.kind === "policy" &&
+            r.data.dependsOn?.includes(entry.id),
+        )
+      )
+        throw new DomainError(
+          "다른 정책이 의존하는 문서입니다. 정책 연결을 해제하거나 사용 중단 상태로 관리하세요.",
+        );
       if (
         (await service.store.list<Requirement>("requirement")).some((r) =>
           [...(r.data.policyIds ?? []), ...(r.data.glossaryIds ?? [])].includes(

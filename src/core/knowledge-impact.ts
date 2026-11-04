@@ -13,12 +13,18 @@ import {
   type Requirement,
 } from "./requirement-model";
 import type { Link } from "./service";
+import {
+  policyGraph,
+  policyDependents,
+  policyPath,
+} from "./policy-dependencies";
 
 export const knowledgeImpactQuery = z.strictObject({
   id,
   kind: z
-    .enum(["requirements", "tasks", "issues", "prs"])
+    .enum(["requirements", "tasks", "issues", "prs", "policies"])
     .default("requirements"),
+  scope: z.enum(["all", "direct"]).default("all"),
   project: id.optional(),
   offset: z.coerce
     .number()
@@ -37,7 +43,7 @@ export type ImpactReference = {
   project: ProjectRef;
   via: "prd" | "task" | "subtask" | "published_issue";
   taskId?: string;
-};
+} & Partial<ReturnType<typeof policyPath>>;
 export type ImpactItem = {
   id: string;
   kind: ImpactKind;
@@ -52,7 +58,7 @@ export type ImpactItem = {
   repository?: string;
   number?: number;
   url?: string;
-};
+} & Partial<ReturnType<typeof policyPath>>;
 export type KnowledgeImpactData = {
   projects: Stored<Project>[];
   requirements: Stored<Requirement>[];
@@ -60,6 +66,7 @@ export type KnowledgeImpactData = {
   items: Stored<GitHubItem>[];
   links: Stored<Link>[];
   requirementIssues: Stored<IssuePublication>[];
+  knowledge: Stored<KnowledgeEntry>[];
 };
 type Candidate = Omit<ImpactItem, "projects" | "references" | "referenceCount">;
 
@@ -70,13 +77,20 @@ export function knowledgeImpact(
   query: z.infer<typeof knowledgeImpactQuery>,
 ) {
   const projects = new Map(data.projects.map((r) => [r.data.id, r.data]));
+  const graph = policyGraph([...data.knowledge, document]);
+  const dependents = policyDependents(graph, document.data.id);
+  const included = new Set(
+    query.scope === "all" && document.data.kind === "policy"
+      ? dependents.keys()
+      : [document.data.id],
+  );
   const requirements = data.requirements.filter(
     (r) =>
       projects.has(r.data.project) &&
       (document.data.kind === "policy"
         ? r.data.policyIds
         : r.data.glossaryIds
-      )?.includes(document.data.id),
+      )?.some((id) => included.has(id)),
   );
   const options = [...new Set(requirements.map((r) => r.data.project))]
     .map((id) => ({ id, name: projects.get(id)!.name }))
@@ -130,18 +144,41 @@ export function knowledgeImpact(
     tasks: new Map(),
     issues: new Map(),
     prs: new Map(),
+    policies: new Map(),
   };
-  function add(item: Candidate, ref: ImpactReference) {
+  function add(item: Candidate, ref?: ImpactReference) {
     let current = found[item.kind].get(item.id);
     if (!current) {
       current = { item, refs: new Map() };
       found[item.kind].set(item.id, current);
     }
-    current.refs.set(
-      `${ref.requirementId}:${ref.taskId ?? ""}:${ref.via}`,
+    if (ref)
+      current.refs.set(
+        `${ref.requirementId}:${ref.taskId ?? ""}:${ref.via}:${ref.policyPath?.[0]?.id ?? ""}`,
+        ref,
+      );
+  }
+  function addPolicy(id: string, ref?: ImpactReference) {
+    if (id === document.data.id) return;
+    const row = graph.policies.get(id);
+    if (!row) return;
+    const evidence = policyPath(graph, dependents, id, document.data.id);
+    add(
+      {
+        id,
+        kind: "policies",
+        title: row.data.name,
+        label: evidence.policyDistance === 1 ? "직접 의존" : "간접 의존",
+        status: row.data.status,
+        assignees: row.data.owner ? [row.data.owner] : [],
+        updatedAt: row.updatedAt,
+        ...evidence,
+      },
       ref,
     );
   }
+  if (!query.project && document.data.kind === "policy")
+    for (const id of included) addPolicy(id);
   function addGitHub(row: Stored<GitHubItem>, ref: ImpactReference) {
     const item = row.data;
     add(
@@ -164,81 +201,92 @@ export function knowledgeImpact(
     const r = row.data;
     if (query.project && r.project !== query.project) continue;
     const project = projects.get(r.project)!;
-    const ref: ImpactReference = {
-      requirementId: r.id,
-      label: requirementLabel(r, project.featurePrefix),
-      title: r.featureName,
-      project: { id: project.id, name: project.name },
-      via: "prd",
-    };
-    add(
-      {
-        id: r.id,
-        kind: "requirements",
+    const matches: Array<string | undefined> =
+      document.data.kind === "policy"
+        ? [...new Set((r.policyIds ?? []).filter((id) => included.has(id)))]
+        : [undefined];
+    for (const policyId of matches) {
+      const ref: ImpactReference = {
+        requirementId: r.id,
+        label: requirementLabel(r, project.featurePrefix),
         title: r.featureName,
-        label: ref.label,
-        status: r.status,
-        assignees: r.assignee ? [r.assignee] : [],
-        updatedAt: row.updatedAt,
-      },
-      ref,
-    );
-    const queue = r.taskId ? [r.taskId] : [];
-    const visited = new Set<string>();
-    while (queue.length) {
-      const taskId = queue.pop()!;
-      if (visited.has(taskId)) continue;
-      visited.add(taskId);
-      const taskRow = tasks.get(taskId);
-      if (!taskRow || taskRow.data.project !== r.project) continue;
-      const task = taskRow.data;
-      const taskRef: ImpactReference = {
-        ...ref,
-        taskId,
-        via: taskId === r.taskId ? "task" : "subtask",
+        project: { id: project.id, name: project.name },
+        via: "prd",
+        ...(policyId
+          ? policyPath(graph, dependents, policyId, document.data.id)
+          : {}),
       };
+      if (policyId) addPolicy(policyId, ref);
       add(
         {
-          id: taskId,
-          kind: "tasks",
-          title: task.title,
-          label: "",
-          status: task.status,
-          assignees: task.assignee ? [task.assignee] : [],
-          updatedAt: taskRow.updatedAt,
+          id: r.id,
+          kind: "requirements",
+          title: r.featureName,
+          label: ref.label,
+          status: r.status,
+          assignees: r.assignee ? [r.assignee] : [],
+          updatedAt: row.updatedAt,
         },
-        taskRef,
+        ref,
       );
-      for (const item of links.get(taskId) ?? []) addGitHub(item, taskRef);
-      for (const child of children.get(taskId) ?? []) queue.push(child.data.id);
-    }
-    for (const publication of publications.get(r.id) ?? []) {
-      const p = publication.data;
-      if (p.project !== r.project) continue;
-      const publicationRef: ImpactReference = {
-        ...ref,
-        via: "published_issue",
-      };
-      const cached = githubByNumber.get(
-        canonical("issue", p.repository, p.number!),
-      );
-      if (cached) addGitHub(cached, publicationRef);
-      else
+      const queue = r.taskId ? [r.taskId] : [];
+      const visited = new Set<string>();
+      while (queue.length) {
+        const taskId = queue.pop()!;
+        if (visited.has(taskId)) continue;
+        visited.add(taskId);
+        const taskRow = tasks.get(taskId);
+        if (!taskRow || taskRow.data.project !== r.project) continue;
+        const task = taskRow.data;
+        const taskRef: ImpactReference = {
+          ...ref,
+          taskId,
+          via: taskId === r.taskId ? "task" : "subtask",
+        };
         add(
           {
-            id: canonical("issue", p.repository, p.number!),
-            kind: "issues",
-            title: r.featureName,
-            label: `${p.repository}#${p.number}`,
-            status: "unknown",
-            assignees: p.assignee ? [p.assignee] : [],
-            updatedAt: publication.updatedAt,
-            repository: p.repository,
-            number: p.number,
-            url: p.url,
+            id: taskId,
+            kind: "tasks",
+            title: task.title,
+            label: "",
+            status: task.status,
+            assignees: task.assignee ? [task.assignee] : [],
+            updatedAt: taskRow.updatedAt,
           },
-          publicationRef,
+          taskRef,
         );
+        for (const item of links.get(taskId) ?? []) addGitHub(item, taskRef);
+        for (const child of children.get(taskId) ?? [])
+          queue.push(child.data.id);
+      }
+      for (const publication of publications.get(r.id) ?? []) {
+        const p = publication.data;
+        if (p.project !== r.project) continue;
+        const publicationRef: ImpactReference = {
+          ...ref,
+          via: "published_issue",
+        };
+        const cached = githubByNumber.get(
+          canonical("issue", p.repository, p.number!),
+        );
+        if (cached) addGitHub(cached, publicationRef);
+        else
+          add(
+            {
+              id: canonical("issue", p.repository, p.number!),
+              kind: "issues",
+              title: r.featureName,
+              label: `${p.repository}#${p.number}`,
+              status: "unknown",
+              assignees: p.assignee ? [p.assignee] : [],
+              updatedAt: publication.updatedAt,
+              repository: p.repository,
+              number: p.number,
+              url: p.url,
+            },
+            publicationRef,
+          );
+      }
     }
   }
   const results = [...found[query.kind].values()].sort(
@@ -264,6 +312,7 @@ export function knowledgeImpact(
     tasks: found.tasks.size,
     issues: found.issues.size,
     prs: found.prs.size,
+    policies: found.policies.size,
     projects: query.project
       ? found.requirements.size
         ? 1
@@ -282,6 +331,19 @@ export function knowledgeImpact(
     projects: options,
     kind: query.kind,
     project: query.project ?? null,
+    scope: query.scope,
+    policyRelations:
+      document.data.kind === "policy"
+        ? {
+            dependencies: [...new Set(document.data.dependsOn ?? [])].flatMap(
+              (id) => {
+                const row = graph.policies.get(id);
+                return row ? [{ id, name: row.data.name }] : [];
+              },
+            ),
+            dependentCount: Math.max(0, dependents.size - 1),
+          }
+        : null,
     page: {
       items,
       total: results.length,

@@ -1,9 +1,11 @@
 "use client";
 import { createId } from "../core/browser-id";
-import { useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { EditorDialog } from "./requirements-panel";
 import MarkdownBody from "./markdown-body";
 import KnowledgeImpactPanel from "./knowledge-impact-panel";
+import ReferencePicker from "./reference-picker";
+import { policyGraph, policyDependents } from "../core/policy-dependencies";
 import { knowledgeStates, type KnowledgeEntry } from "../core/knowledge-model";
 import type { Stored } from "../core/model";
 export default function KnowledgePanel({
@@ -46,6 +48,11 @@ export default function KnowledgePanel({
       )
       .sort((a, b) => a.data.name.localeCompare(b.data.name, "ko"));
   const [impact, setImpact] = useState<Stored<KnowledgeEntry> | null>(null);
+  const graph = useMemo(() => policyGraph(rows), [rows]);
+  const blocked = useMemo(
+    () => (editing ? policyDependents(graph, editing.data.id) : new Map()),
+    [graph, editing],
+  );
   async function run(work: () => Promise<void>) {
     if (pending.current) return;
     pending.current = true;
@@ -86,6 +93,9 @@ export default function KnowledgePanel({
           owner: String(f.get("owner")),
           remarks: String(f.get("remarks")),
           status: String(f.get("status")),
+          ...(kind === "policy"
+            ? { dependsOn: f.getAll("dependsOn").map(String) }
+            : {}),
         },
       });
       setEditing(undefined);
@@ -186,6 +196,16 @@ export default function KnowledgePanel({
                 <p className="muted">비고: {row.data.remarks}</p>
               )}
             </details>
+            {kind === "policy" && !!row.data.dependsOn?.length && (
+              <p className="muted policy-dependency-preview">
+                따르는 정책:{" "}
+                {row.data.dependsOn
+                  .map(
+                    (id) => graph.policies.get(id)?.data.name ?? "연결된 정책",
+                  )
+                  .join(", ")}
+              </p>
+            )}
             <div className="knowledge-card-footer">
               <small className="muted">
                 {new Date(row.updatedAt).toLocaleString("ko-KR")} ·{" "}
@@ -315,6 +335,34 @@ export default function KnowledgePanel({
                   defaultValue={editing?.data.remarks}
                 />
               </label>
+              {kind === "policy" && (
+                <>
+                  <p className="muted">
+                    이 정책의 기준이 되는 정책을 연결하세요. 기준 정책이 바뀌면
+                    이 정책을 사용하는 PRD도 영향 조회에 포함됩니다.
+                  </p>
+                  <ReferencePicker
+                    key={editing?.data.id ?? "new-policy"}
+                    name="dependsOn"
+                    label="따르는 정책"
+                    buttonLabel="기준 정책 선택"
+                    max={50}
+                    initial={editing?.data.dependsOn}
+                    options={rows
+                      .filter(
+                        (r) =>
+                          r.data.kind === "policy" &&
+                          r.data.id !== editing?.data.id,
+                      )
+                      .map((r) => ({
+                        ...r.data,
+                        disabledReason: blocked.has(r.data.id)
+                          ? "현재 정책에 의존하고 있어 연결할 수 없습니다."
+                          : undefined,
+                      }))}
+                  />
+                </>
+              )}
               <label>
                 상태
                 <select
@@ -364,14 +412,17 @@ export default function KnowledgePanel({
             key={impact.data.id}
             id={impact.data.id}
             api={api}
-            onOpen={
-              onOpenRelated
-                ? (kind, id) => {
-                    setImpact(null);
-                    onOpenRelated(kind, id);
-                  }
-                : undefined
-            }
+            onOpen={(kind, id) => {
+              if (kind === "policies") {
+                const row = rows.find(
+                  (r) => r.data.id === id && r.data.kind === "policy",
+                );
+                if (row) setImpact(row);
+              } else if (onOpenRelated) {
+                setImpact(null);
+                onOpenRelated(kind, id);
+              }
+            }}
           />
           <div className="form-actions">
             <button
