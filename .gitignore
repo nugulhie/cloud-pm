@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+
+.next/
+.data/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+.next-e2e/
+.next-pm/
+.next-*/
+
+# Local OS files and private keys
+.DS_Store
+*.pem
+*.key
