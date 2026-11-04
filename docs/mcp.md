@@ -114,6 +114,13 @@ Claude Chat이 대화에서 기획하고 MCP 도구를 호출하는 흐름에는
 
 ## 업무 조회와 필드별 수정 (2026-10-29)
 
+PRD의 여러 태스크 생성은 `convert_requirements_to_tasks`의 `tasks` 배열로 지원한다.
+`entries`에 PRD 하나와 최신 `revision`을 지정하고 각 태스크의 `id`, `title`,
+`repository`, `assignee`를 전달한다. `tasks` 생략 시 기존 기본 태스크 생성으로 동작한다.
+`preview_requirement_issue`와 `publish_requirement_issue`에는 이슈를 연결할 `taskId`를
+지정하며, 여러 태스크가 있으면 필수다. 자세한 예제와 재시도 조건은
+[PRD 연결 계약](prd-tasks.md)에 있다.
+
 다음 15개 도구를 추가했다. 기존 생성·수정·삭제 도구도 계속 제공한다.
 
 | 도구                                                   | 용도                                       |
