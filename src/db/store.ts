@@ -11,6 +11,7 @@ DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='records'::regc
 CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, kind TEXT NOT NULL, entity_id TEXT NOT NULL, actor TEXT NOT NULL, data JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
 ALTER TABLE events ADD COLUMN IF NOT EXISTS workspace_id TEXT NOT NULL DEFAULT 'main';
 CREATE INDEX IF NOT EXISTS events_workspace ON events(workspace_id,created_at);
+CREATE INDEX IF NOT EXISTS events_entity_revision ON events(workspace_id,kind,entity_id,(COALESCE((data->>'revision')::bigint,0)) DESC,created_at DESC,id DESC);
 CREATE TABLE IF NOT EXISTS sync_jobs (
  id TEXT PRIMARY KEY, event TEXT NOT NULL, repository TEXT NOT NULL,
  status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,

@@ -56,6 +56,7 @@ const fields: Record<string, string> = {
   feature: "기능",
   body: "본문",
   files: "변경 파일",
+  headSha: "PR 커밋",
   ci: "CI 검사",
   author: "작성자",
   reason: "연결 근거",
@@ -98,6 +99,8 @@ function text(key: string, value: unknown) {
   if (value === null || value === undefined || value === "") return "미지정";
   if (key === "yaml") return "YAML 조건 등록";
   if (key === "files" && Array.isArray(value)) return `${value.length}개 파일`;
+  if (key === "files" && typeof value === "number") return `${value}개 파일`;
+  if (key === "headSha" && typeof value === "string") return value.slice(0, 12);
   if (key === "ci" && typeof value === "object")
     return (
       states[(value as { state: string }).state] ??
@@ -109,6 +112,34 @@ function text(key: string, value: unknown) {
   const t = states[String(value)] ?? String(value);
   return t.length > 250 ? t.slice(0, 250) + "…" : t;
 }
+// Select the recent event IDs before reading JSON; never window over diff payloads.
+const historySnapshot = (alias: "e" | "p") => `CASE WHEN ${alias}.kind='github'
+  THEN (${alias}.data->'value') - 'files' ||
+    CASE WHEN jsonb_typeof(${alias}.data->'value'->'files')='array'
+      THEN jsonb_build_object('files',jsonb_array_length(${alias}.data->'value'->'files'))
+      ELSE '{}'::jsonb END
+  ELSE ${alias}.data->'value' END`;
+export const changeHistoryQuery = `WITH recent AS MATERIALIZED (
+  SELECT id,workspace_id,kind,entity_id,actor,created_at
+  FROM events
+  WHERE (workspace_id=$1 OR (workspace_id='main' AND kind='github'))
+    AND kind IN ('project','feature','requirement','knowledge','task','github','link','sync','evaluation')
+  ORDER BY created_at DESC,id DESC LIMIT 300
+)
+SELECT r.id,r.kind,r.entity_id,r.actor,r.created_at,
+  ${historySnapshot("e")} AS value,previous.value AS previous
+FROM recent r JOIN events e ON e.id=r.id
+LEFT JOIN LATERAL (
+  SELECT ${historySnapshot("p")} AS value
+  FROM events p
+  WHERE p.workspace_id=r.workspace_id AND p.kind=r.kind AND p.entity_id=r.entity_id
+    AND (COALESCE((p.data->>'revision')::bigint,0),p.created_at,p.id)
+      < (COALESCE((e.data->>'revision')::bigint,0),r.created_at,r.id)
+  ORDER BY COALESCE((p.data->>'revision')::bigint,0) DESC,p.created_at DESC,p.id DESC
+  LIMIT 1
+) previous ON true
+ORDER BY r.created_at DESC,r.id DESC`;
+
 export async function changeHistory(
   store: Store,
   actor: Actor,
@@ -129,10 +160,7 @@ export async function changeHistory(
     created_at: string;
     value: Record<string, unknown>;
     previous: Record<string, unknown> | null;
-  }>(
-    `WITH history AS (SELECT id,kind,entity_id,actor,created_at,data->'value' AS value,lag(data->'value') OVER(PARTITION BY workspace_id,kind,entity_id ORDER BY (data->>'revision')::int,created_at,id) AS previous FROM events WHERE (workspace_id=$1 OR (workspace_id='main' AND kind='github')) AND kind NOT IN ('comment','notification_read')) SELECT * FROM history ORDER BY created_at DESC LIMIT 300`,
-    [store.workspaceId],
-  );
+  }>(changeHistoryQuery, [store.workspaceId]);
   const names = new Map(
     (
       await store.query<{ login: string; display_name: string }>(
