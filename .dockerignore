@@ -1,0 +1,15 @@
+node_modules
+.next
+.next-e2e
+.next-pm
+.next-*
+.data
+.env*
+**/.env*
+.npmrc
+**/.npmrc
+.git
+dist
+test-results
+playwright-report
+*.tsbuildinfo

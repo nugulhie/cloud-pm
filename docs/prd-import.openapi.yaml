@@ -1,0 +1,122 @@
+openapi: 3.1.0
+info:
+  title: PRD CSV Import
+  version: 1.0.0
+  description: UTF-8 CSV를 미리 확인하고 프로젝트 PRD에 일괄 등록한다. GitHub나 외부 문서는 수정하지 않는다.
+paths:
+  /api/requirements/import/preview:
+    post:
+      operationId: previewRequirementCsv
+      summary: CSV 열 매핑·원본 정보·중복·오류 미리보기
+      security: [{ session: [] }, { bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportFile" }
+      responses:
+        "200":
+          description: 저장 없이 행별 매핑과 오류, 건수, previewHash를 반환한다. ID·기능명 열은 필수다.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  [project, fileName, rows, counts, warnings, previewHash]
+                properties:
+                  project: { type: string }
+                  fileName: { type: string }
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      required: [row, data, source, errors, existing]
+                      properties:
+                        row: { type: integer }
+                        data:
+                          {
+                            type: object,
+                            description: 원본 ID·기능명·상세설명·정책·비고·선택 상태·담당자,
+                          }
+                        source:
+                          {
+                            type: object,
+                            description: 파일명·원본 편집일시·원본 편집자,
+                          }
+                        errors: { type: array, items: { type: string } }
+                        existing:
+                          oneOf:
+                            - type: "null"
+                            - type: object
+                              properties:
+                                id: { type: string }
+                                revision: { type: integer }
+                  counts:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      invalid: { type: integer }
+                      existing: { type: integer }
+                      new: { type: integer }
+                  warnings: { type: array, items: { type: string } }
+                  previewHash: { type: string, pattern: "^[a-f0-9]{64}$" }
+        "400": { description: CSV 구조·필수 헤더·행 수 오류 }
+        "401": { description: 인증 필요 }
+        "403": { description: 프로젝트 접근 또는 쓰기 권한 없음 }
+        "413": { description: 파일은 최대 1 MiB }
+  /api/requirements/import:
+    post:
+      operationId: importRequirementCsv
+      summary: 미리 확인한 CSV를 원자적으로 가져오기
+      description: 같은 프로젝트의 원본 ID로 중복을 판정한다. skip은 기존 항목 유지, update는 CSV에 존재하는 열만 갱신한다. 연결 태스크·이슈와 시스템 편집 감사 정보는 덮어쓰지 않는다. 한 행이라도 오류가 있거나 미리보기 이후 대상이 변경되면 전체 등록을 취소한다.
+      security: [{ session: [] }, { bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ImportFile"
+                - type: object
+                  required: [mode, previewHash]
+                  properties:
+                    mode: { type: string, enum: [skip, update] }
+                    previewHash: { type: string, pattern: "^[a-f0-9]{64}$" }
+      responses:
+        "200":
+          description: CSV의 원본 ID·편집 정보는 별도로 보존하고, 시스템 편집자는 실제 가져온 사용자로 기록한다.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [created, updated, skipped]
+                properties:
+                  created: { type: integer }
+                  updated: { type: integer }
+                  skipped: { type: integer }
+        "400": { description: 행별 검증 오류가 있음. 등록하지 않음 }
+        "401": { description: 인증 필요 }
+        "403": { description: 프로젝트 접근 또는 쓰기 권한 없음 }
+        "409":
+          {
+            description: 미리보기 이후 CSV·대상 revision이 변경됨. 다시 미리보기 필요,
+          }
+        "413": { description: 파일은 최대 1 MiB }
+components:
+  securitySchemes:
+    session: { type: apiKey, in: cookie, name: pm_session }
+    bearer: { type: http, scheme: bearer }
+  schemas:
+    ImportFile:
+      type: object
+      required: [project, fileName, csv]
+      properties:
+        project: { type: string, pattern: "^[A-Za-z0-9_-]{1,100}$" }
+        fileName: { type: string, minLength: 1, maxLength: 255 }
+        csv:
+          {
+            type: string,
+            maxLength: 1048576,
+            description: UTF-8·BOM·쉼표 구분,
+            최대 500행. 인용된 쉼표·줄바꿈·큰따옴표 지원,
+          }

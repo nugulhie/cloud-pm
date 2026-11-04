@@ -1,0 +1,2 @@
+# 기존 이슈와 비정형 제보도 받을 수 있도록 빈 이슈 작성을 유지합니다.
+blank_issues_enabled: true

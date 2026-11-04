@@ -1,0 +1,93 @@
+purpose:
+  stands_in_for: GitHub.com REST API의 App 설치 조회·설치 토큰·저장소·이슈 경로
+  unblocks: 실제 App 권한과 개인 키가 없는 동안 서버 인증과 요청 직렬화를 검증한다.
+assumptions:
+  - id: installation-jwt-and-token
+    status: supported
+    claim: GitHub App은 RS256 JWT로 설치 정보를 조회하고 한 시간 유효한 설치 토큰을 발급할 수 있다.
+    reason: GitHub 공식 인증 계약이 이 흐름을 설명한다. 실제 조직의 App 설치 여부는 확인되지 않았다.
+    verification: >-
+      2026-11-02 공식 문서를 확인했다. github-app-20261102에서 합성 키로 JWT 서명을 단위 검증하고,
+      HTTP 시뮬레이션에서 설치 GET 200 → 토큰 POST 201 → 설치 저장소 GET 200 순서를 관찰했다.
+      동시 호출 8개는 토큰 발급 1회를 공유했다. 모의 서버는 암호 서명 자체를 검증하지 않는다.
+    source: >-
+      https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-json-web-token-jwt-for-a-github-app;
+      https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app;
+      tests/github-app.test.ts; tests/github-app-simulation.ts; postman/mocks/github-app/default.js
+    updated_at: "2026-11-02"
+  - id: caller-issue-write-and-revocation
+    status: supported
+    claim: 테스트한 HTTP 모의 시나리오에서 클라이언트는 설치 토큰으로 이슈를 한 번 생성하고 설치 거부 후 접근을 실패 처리했다.
+    reason: 호출자 실행과 모의 서버의 생성 상태를 함께 관찰했다. 실제 GitHub 권한 승인을 입증하는 주장은 아니다.
+    verification: >-
+      2026-11-02 github-app-20261102에서 이슈 POST 201 후 GET 200으로 이슈 1개와 봇 작성자를 확인했다.
+      서버 상태 issueWrites=1을 검증했다. 철회 주입 후 캐시를 무효화하자 설치 GET 403이 발생했고
+      호출자는 503 DomainError로 실패했다. 총 9개 요청이 모의 서버에 전달됐고 실서비스 통과는 0개였다.
+      실제 GitHub 이슈 생성이나 설치 철회는 수행하지 않았다.
+    source: tests/github-app-simulation.ts; postman/mocks/github-app/default.js; .data/ux-review/github-app-simulation.log
+    updated_at: "2026-11-02"
+  - id: live-org-installation-and-delivery
+    status: unknown
+    claim: 운영 조직에 App이 설치되고 서버에서 저장소 조회·이슈 작성·외부 웹훅 수신을 할 수 있다.
+    reason: >-
+      실제 설치·조회·delivery는 2026-11-03 검증했다. 다만 이슈 쓰기는 권한 설정만 확인했고
+      외부 이슈를 생성하지 않아 이 주장의 모든 기능을 실제 동작으로 입증하지는 않았다.
+    verification: >-
+      2026-11-02 서버 App 환경 변수 미설정과 AWS 보안 그룹을 읽기 전용으로 점검했다.
+      조직 설치·권한, 보호된 키 배포, GitHub 발신 IP와 경로 설정, 실제 저장소 조회와 delivery 확인이 남아 있다.
+      공용 검색으로 재사용할 제공자 모의를 찾으려 했으나 검색 서비스가 실패해 공식 문서 기반 로컬 모의를 작성했다.
+      이 기록은 당시 상태이며, 다음 live-read와 live-delivery 항목에 2026-11-03 실제 검증 결과를 추가했다.
+    source: docs/github-app-setup.md; compose.ec2.yaml; https://docs.github.com/en/rest/meta/meta#get-github-meta-information
+    updated_at: "2026-11-03"
+  - id: live-read
+    status: supported
+    claim: 운영 App 설치는 soldoc-kr 저장소 58개를 조회하고 GitHub 계정 없는 서비스 멤버에게 지정 워크스페이스의 접근을 제공한다.
+    reason: 실제 GitHub API·운영 작업자 인증과 임시 서비스 사용자의 API·브라우저·조회 전용 MCP 결과를 확인했다.
+    verification: >-
+      2026-11-03 github-app-live-20261103에서 실제 App·설치 ID와 소유 조직을 검증하고 PR·이슈 GET 성공을 확인했다.
+      운영 웹과 작업자에 같은 설정을 배포하고 양쪽에서 58개 저장소 접근을 확인했다.
+      개인 GitHub 연결이 없는 임시 사용자의 대시보드와 조회 MCP가 통과했고 브라우저 오류는 0개였다.
+      임시 사용자와 발급한 MCP 토큰은 검증 후 삭제·폐기했다. 외부 이슈 생성은 수행하지 않았다.
+    source: docs/github-app-setup.md; .data/ux-review/github-app-live-check.log; .data/aws-deploy/github-app-config.json
+    updated_at: "2026-11-03"
+  - id: live-delivery
+    status: supported
+    claim: 현재 운영 수신 경로는 실제 GitHub ping·설치·저장소 이벤트를 서명 검증 후 수락하고 서명 없는 요청을 거부한다.
+    reason: GitHub의 실제 delivery 기록과 운영 HTTPS 응답을 확인했다. 모의 서버 결과로 추정한 것이 아니다.
+    verification: >-
+      2026-11-03 github-app-live-20261103에서 초기 ping·설치 이벤트의 502 접속 실패를 확인했다.
+      보호된 App secret과 GitHub 발신 IPv4·정확한 호스트·경로·POST 제한을 적용한 뒤 재전송했다.
+      GitHub delivery 기록에서 ping 200, installation 202를 확인했다.
+      이후 실제 issues·push·pull_request·check_run 이벤트도 202로 도착했다.
+      서명 없는 HTTPS 요청은 401이었다. 202 수신은 작업자의 동기화 완료와 구분한다.
+      별도로 issues delivery b047aa2c-d73e-11f1-8d63-6a30d326589a의 작업이 attempts=1,
+      status=completed, 오류 없음으로 끝난 것을 DB·작업자 로그에서 확인했다. 그 시점 후속 이벤트는 정상 대기·실행 중이었다.
+    source: docs/github-app-setup.md; src/webhooks/github.ts; .data/aws-deploy/github-app-deliveries.json
+    updated_at: "2026-11-03"
+  - id: prd-native-assignees
+    status: supported
+    claim: 테스트한 PRD HTTP 시나리오에서 저장소 담당자 조회·배정 검사·Assignees 전달과 배정 누락 경고가 동작한다.
+    reason: 실제 Requirements 서비스와 GitHubClient를 로컬 대체 서버에 연결하고 외부 생성 횟수와 반환 상태를 함께 확인했다.
+    verification: >-
+      2026-11-03 Postman CLI 1.80.0의 github-app 시뮬레이션에서 tests/prd-github-simulation.ts를 실행했다.
+      총 12개 요청이 모의 서버에 전달됐고 실서비스 통과는 0개였다. 사용자 목록에서 봇이 제외됐고,
+      배정 불가 404에서 이슈 생성 횟수는 0이었다. 허용된 사용자에 대해 POST assignees와 반환 배정을 확인했다.
+      담당자가 응답에서 빠진 경우에도 created와 경고를 보존했고 재발행은 차단돼 총 생성은 2회였다.
+      ADMIN-001 접두어도 확인했다. 제공자 모의는 공식 GitHub 계약 기반의 자체 구현이다.
+      실제 App으로 사용자 목록 13명과 204 배정 가능 여부를 별도로 확인했으며 실제 이슈 생성은 하지 않았다.
+    source: >-
+      tests/prd-github-simulation.ts; .data/ux-review/prd-github-simulation.log;
+      .data/ux-review/prd-github-assignees-live-read.json;
+      https://docs.github.com/en/rest/issues/assignees;
+      https://docs.github.com/en/rest/issues/issues#create-an-issue
+    updated_at: "2026-11-03"
+fingerprints:
+  # 담당자 기능은 같은 GitHub 대체 서버에 경로를 추가해 아래 별도 실행으로 검증했다.
+  - id: github-app-20261102
+    date: "2026-11-02"
+    commit: null # 현재 디렉터리에 Git 메타데이터가 없다.
+    cli: Postman CLI 1.80.0; Node.js 24.21.0; 로컬 미배포 소스
+  - id: github-app-live-20261103
+    date: "2026-11-03"
+    commit: null
+    cli: Postman CLI 1.80.0; 배포 github-app-20261102; App 5589960; 설치 178059528

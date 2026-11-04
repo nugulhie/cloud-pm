@@ -1,0 +1,8 @@
+simulation: github-app
+routing: path
+mocks:
+  - name: github-app
+    routeKey: github
+    origin:
+      - api.github.com
+    path: postman/mocks/github-app

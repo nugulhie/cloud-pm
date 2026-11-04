@@ -1,0 +1,53 @@
+name: 기능·개선 요청
+description: 사용자에게 필요한 결과와 인수 기준을 정의합니다.
+title: "[기능] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        한 이슈에는 독립적으로 설명·검증할 수 있는 작업을 작성하세요.
+        연결 정보를 모르면 비워 두고 페이지의 미분류함에서 배정하는 흐름을 사용합니다.
+  - type: textarea
+    id: cloud-pm-link
+    attributes:
+      label: Cloud PM 연결
+      description: 페이지에서 복사한 연결 정보를 붙여 넣으세요. 아는 ID만 입력하고 나머지는 비워 두세요.
+      render: yaml
+      placeholder: |
+        version: 1
+        workspace: product-team
+        project: customer-platform
+        feature: social-login
+        task: null
+    validations:
+      required: false
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 목적과 사용자 문제
+      placeholder: 누가 어떤 상황에서 무엇을 할 수 있어야 하나요?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 작업 범위
+      placeholder: 이번 이슈에서 바뀌는 화면·동작·처리 범위를 작성하세요.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 인수 기준
+      description: 기획자가 확인할 수 있는 동작과 결과를 작성하세요. 기능에 기준이 있으면 링크와 이번 작업에 해당하는 항목을 지정하세요.
+      placeholder: |
+        - [ ] 로그인 실패 시 원인과 재시도 방법을 확인할 수 있다.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 제외 범위·의존성·참고 자료
+      description: 관련 기획 문서, 선행 작업, 디자인 링크 등을 추가하세요.
+    validations:
+      required: false

@@ -1,0 +1,11 @@
+version: 1
+name: github-app
+slug: github-app
+origin: api.github.com
+interceptRequests: true
+protocol: http
+port: 4912
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true

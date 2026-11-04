@@ -1,0 +1,77 @@
+# Existing ALB -> host nginx -> loopback app; no public DB/app ports.
+x-environment: &environment
+  NODE_ENV: production
+  APP_URL: https://${DOMAIN:?Set DOMAIN}
+  DATABASE_URL: postgresql://cloudpm:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/cloud_pm
+  TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY}
+  GITHUB_ORG: ${GITHUB_ORG:?Set GITHUB_ORG}
+  GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+  GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+  GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+  GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+  GITHUB_APP_INSTALLATION_ID: ${GITHUB_APP_INSTALLATION_ID:-}
+  GITHUB_APP_PRIVATE_KEY_BASE64: ${GITHUB_APP_PRIVATE_KEY_BASE64:-}
+  GITHUB_APP_WORKSPACE_ID: ${GITHUB_APP_WORKSPACE_ID:-main}
+  GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET:-}
+  GITHUB_SYNC_SINCE: ${GITHUB_SYNC_SINCE:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: cloud_pm
+      POSTGRES_USER: cloudpm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    command:
+      [
+        postgres,
+        -c,
+        shared_buffers=32MB,
+        -c,
+        max_connections=30,
+        -c,
+        work_mem=2MB,
+      ]
+    volumes:
+      - database:/var/lib/postgresql
+    mem_limit: 192m
+    shm_size: 64m
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U cloudpm -d cloud_pm]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    logging: *logging
+  app:
+    image: cloud-pm-agent:web-${RELEASE:?Set RELEASE}
+    environment:
+      <<: *environment
+      NODE_OPTIONS: --max-old-space-size=256
+    ports:
+      - "127.0.0.1:3000:3000"
+    mem_limit: 320m
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+  worker:
+    image: cloud-pm-agent:worker-${RELEASE:?Set RELEASE}
+    environment:
+      <<: *environment
+      NODE_OPTIONS: --max-old-space-size=128
+    mem_limit: 192m
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+volumes:
+  database:

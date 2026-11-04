@@ -1,0 +1,4 @@
+export const ASANA_MAX_TASKS = 10_000;
+export const ASANA_MAX_FILE_BYTES = 10 * 1024 * 1024;
+export const ASANA_MAX_REQUEST_BYTES = 24 * 1024 * 1024;
+export const ASANA_PREVIEW_PAGE_SIZE = 50;

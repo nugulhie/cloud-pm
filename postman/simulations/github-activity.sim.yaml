@@ -1,0 +1,15 @@
+# Simulation scaffold. Add fault-injection scenarios under each mock, e.g.:
+#   scenarios:
+#     - overrides:
+#         conditions:
+#           latency: { delay_ms: 500 }
+# Then serve it with: postman simulation run <this file>
+
+simulation: github-activity
+routing: path
+mocks:
+  - name: github-activity
+    routeKey: github
+    origin:
+      - api.github.com
+    path: postman/mocks/github-activity

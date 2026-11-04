@@ -1,0 +1,62 @@
+name: 버그 신고
+description: 발생 현상·재현 방법·영향을 기록합니다.
+title: "[버그] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        재현 정보와 기대 결과를 작성하세요. 사용자 개인정보·비밀번호·토큰은 첨부하지 마세요.
+        연결 정보가 없어도 신고할 수 있습니다.
+  - type: textarea
+    id: cloud-pm-link
+    attributes:
+      label: Cloud PM 연결
+      description: 페이지에서 복사한 연결 정보가 있으면 붙여 넣으세요.
+      render: yaml
+      placeholder: |
+        version: 1
+        workspace: product-team
+        project: customer-platform
+        feature: social-login
+        task: null
+    validations:
+      required: false
+  - type: textarea
+    id: actual
+    attributes:
+      label: 발생 현상
+      placeholder: 어떤 오류가 발생했고 언제부터 확인되었나요?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 재현 방법
+      description: 재현되지 않으면 미재현이라고 적고 관찰 조건을 남기세요.
+      placeholder: |
+        1. 로그인 화면에 접속한다.
+        2. 잘못된 인증 정보로 로그인한다.
+        3. 오류 안내가 표시되지 않는다.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대 동작
+      placeholder: 수정 후 확인되어야 하는 결과를 작성하세요.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: 영향 범위
+      placeholder: 영향을 받는 사용자·업무, 발생 빈도, 우회 방법을 작성하세요. 모르면 미확인으로 남기세요.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 환경·증거
+      description: 환경, 버전, 시각, 비식별 처리한 로그·스크린샷 등을 추가하세요.
+    validations:
+      required: false

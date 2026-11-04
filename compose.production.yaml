@@ -1,0 +1,69 @@
+x-app-environment: &app-environment
+  NODE_ENV: production
+  APP_URL: https://${DOMAIN:?Set DOMAIN}
+  DATABASE_URL: postgresql://cloudpm:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/cloud_pm
+  TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY}
+  GITHUB_ORG: ${GITHUB_ORG:?Set GITHUB_ORG}
+  GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+  GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+  GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+  GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+  GITHUB_APP_INSTALLATION_ID: ${GITHUB_APP_INSTALLATION_ID:-}
+  GITHUB_APP_PRIVATE_KEY_BASE64: ${GITHUB_APP_PRIVATE_KEY_BASE64:-}
+  GITHUB_APP_WORKSPACE_ID: ${GITHUB_APP_WORKSPACE_ID:-main}
+  GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET:-}
+  GITHUB_SYNC_SINCE: ${GITHUB_SYNC_SINCE:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: cloud_pm
+      POSTGRES_USER: cloudpm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - database:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U cloudpm -d cloud_pm]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  app:
+    build:
+      context: .
+      target: web
+    environment: *app-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+  worker:
+    build:
+      context: .
+      target: worker
+    environment: *app-environment
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+  proxy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+      - proxy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  database:
+  certificates:
+  proxy_config:

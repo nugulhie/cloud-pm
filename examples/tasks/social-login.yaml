@@ -1,0 +1,18 @@
+# 설명용 예제입니다. 실제 프로젝트·기능 식별자와 PR 번호로 바꾸세요.
+version: 1
+task: TASK-123
+project: customer-platform
+feature: social-login
+
+completion:
+  all:
+    - pull_request:
+        repository: my-org/backend
+        number: 142
+        state: merged
+        target_branch: main
+    - pull_request:
+        repository: my-org/frontend
+        number: 87
+        state: merged
+        target_branch: main

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+package-lock.json
+
+.next/
+.data/
+playwright-report/
+test-results/
+next-env.d.ts
+
+.next-e2e/
+.next-pm/
+
+.next-*/
