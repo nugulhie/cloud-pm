@@ -11,6 +11,7 @@ import {
 import { Collaboration, type TaskComment } from "./collaboration";
 import { Workspaces } from "../workspaces/service";
 import { knowledgeInput, type KnowledgeEntry } from "./knowledge-model";
+import { knowledgeImpact, knowledgeImpactQuery } from "./knowledge-impact";
 import { changeHistory } from "./history";
 import { acquireSyncLease } from "../jobs/lease";
 import { SyncQueue } from "../jobs/queue";
@@ -118,6 +119,33 @@ export class Service {
         revision,
       );
     });
+  }
+  async getKnowledgeImpact(input: unknown) {
+    const query = knowledgeImpactQuery.parse(input);
+    const document = await this.store.get<KnowledgeEntry>(
+      "knowledge",
+      query.id,
+    );
+    if (!document) throw new DomainError("문서가 없습니다.", 404);
+    const data = await this.dashboard();
+    if (
+      query.project &&
+      !data.projects.some((r) => r.data.id === query.project)
+    )
+      throw new DomainError("프로젝트가 없거나 접근할 수 없습니다.", 404);
+    const allowed = this.actor.repositories
+      ? new Set(this.actor.repositories.map((r) => r.toLowerCase()))
+      : null;
+    return knowledgeImpact(
+      document,
+      {
+        ...data,
+        requirementIssues: data.requirementIssues.filter(
+          (r) => !allowed || allowed.has(r.data.repository.toLowerCase()),
+        ),
+      },
+      query,
+    );
   }
   async deleteKnowledge(input: unknown) {
     requireWrite(this.actor);

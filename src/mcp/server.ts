@@ -1,6 +1,7 @@
 import { isDependencyBlocked } from "../core/dependencies";
 import { registerWorkTools } from "./work-tools";
 import { knowledgeInput } from "../core/knowledge-model";
+import { knowledgeImpactQuery } from "../core/knowledge-impact";
 import { csvFileInput, csvImportInput } from "../core/requirement-csv";
 import { commentInput } from "../core/collaboration";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -26,6 +27,16 @@ export function createMcpServer(service: Service) {
     destructiveHint: false,
     openWorldHint: false,
   };
+  server.registerTool(
+    "get_knowledge_impact",
+    {
+      description:
+        "정책·용어를 참조하는 PRD와 하위 태스크·승인된 이슈·PR의 변경 검토 대상 조회. 원본을 수정하지 않으며 실제 반영 여부를 판정하지 않는다. kind와 project로 좁히고 offset/limit로 페이지를 조회한다.",
+      inputSchema: knowledgeImpactQuery.shape,
+      annotations: read,
+    },
+    async (input) => result(await service.getKnowledgeImpact(input)),
+  );
   server.registerTool(
     "list_github_assignees",
     {

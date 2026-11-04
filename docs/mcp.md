@@ -167,3 +167,9 @@ Claude Chat이 대화에서 기획하고 MCP 도구를 호출하는 흐름에는
 GitHub 저장소가 없는 프로젝트도 만들며 저장소는 나중에 연결한다. 재가져오기는 Asana 프로젝트 ID/원본 키로 식별한다. 동명·원본 ID 부재 등으로 자동 판단하기 어려우면 사용자가 원본 키를 확인한다. `projectName`으로 가져올 이름을 지정할 수 있다. 정확한 입력과 중복 정책은 [외부 프로젝트 가져오기](asana-import.md)를 따른다. 기존 `preview_asana_file`/`import_asana_file`은 기존 프로젝트에 작업을 추가하는 레거시 계약으로 유지한다.
 
 Asana 동명 사용자 지정 CSV 열은 각각 보존하며 기본 담당자와 별도 담당자를 구분한다. 기본적으로 모호한 상위는 오류다. 사용자가 승인한 경우 `unresolvedParents:"keep_unlinked"`로 다시 미리 확인하고 같은 정책으로 가져온다. 신규 작업의 모호한 상위는 미연결이며 기존 상위·빈 CSV 제목·변환 불가능한 우선순위는 기존 값을 유지한다. 원본 값과 행별 경고를 반환하며 순환이나 삭제된 작업의 재생성을 허용하지 않는다.
+
+## 정책·용어의 변경 검토 대상
+
+`get_knowledge_impact`는 읽기 토큰으로 사용할 수 있다. 예: `{"id":"policy-security","kind":"issues","project":"customer-platform","limit":40,"offset":0}`. `list_knowledge`에서 문서 ID를 찾은 뒤 PRD·태스크·이슈·PR 중 하나를 선택해 조회한다. 응답의 `summary`와 `references`로 영향을 검토하고, `page.nextOffset`이 있으면 다음 페이지를 요청한다.
+
+PRD의 정책·용어 참조와 하위 태스크·승인된 GitHub 연결을 따른다. 같은 이슈는 중복 집계하지 않는다. 원본이 캐시에 없는 발행 이슈는 `unknown` 상태이며, 정책 편집이 관련 원문을 자동 변경하거나 검토 완료를 뜻하지는 않는다. [API 계약과 권한 규칙](knowledge-impact.md)을 함께 확인한다.

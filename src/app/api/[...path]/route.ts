@@ -23,6 +23,13 @@ async function handle(request: Request, { path }: { path: string[] }) {
     const service = await serviceFor(request);
     const route = path.join("/");
     if (request.method === "GET") {
+      if (route === "knowledge/impact")
+        return NextResponse.json(
+          await service.getKnowledgeImpact(
+            Object.fromEntries(new URL(request.url).searchParams),
+          ),
+          { headers: { "Cache-Control": "no-store" } },
+        );
       if (route === "github/assignees") {
         const query = new URL(request.url).searchParams;
         return NextResponse.json(

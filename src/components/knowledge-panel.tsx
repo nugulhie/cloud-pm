@@ -3,6 +3,7 @@ import { createId } from "../core/browser-id";
 import { useRef, useState, type FormEvent } from "react";
 import { EditorDialog } from "./requirements-panel";
 import MarkdownBody from "./markdown-body";
+import KnowledgeImpactPanel from "./knowledge-impact-panel";
 import { knowledgeStates, type KnowledgeEntry } from "../core/knowledge-model";
 import type { Stored } from "../core/model";
 export default function KnowledgePanel({
@@ -11,12 +12,14 @@ export default function KnowledgePanel({
   canWrite,
   api,
   onRefresh,
+  onOpenRelated,
 }: {
   kind: "policy" | "glossary";
   rows: Stored<KnowledgeEntry>[];
   canWrite: boolean;
   api: (path: string, body?: unknown) => Promise<any>;
   onRefresh: () => Promise<void>;
+  onOpenRelated?: (kind: "requirements" | "tasks", id: string) => void;
 }) {
   const title = kind === "policy" ? "정책" : "용어",
     [query, setQuery] = useState(""),
@@ -42,6 +45,7 @@ export default function KnowledgePanel({
               .includes(query.toLowerCase())),
       )
       .sort((a, b) => a.data.name.localeCompare(b.data.name, "ko"));
+  const [impact, setImpact] = useState<Stored<KnowledgeEntry> | null>(null);
   async function run(work: () => Promise<void>) {
     if (pending.current) return;
     pending.current = true;
@@ -188,6 +192,9 @@ export default function KnowledgePanel({
                 {row.data.editor}
               </small>
               <div className="actions">
+                <button className="text-button" onClick={() => setImpact(row)}>
+                  연결·영향 보기
+                </button>
                 <button
                   className="text-button"
                   onClick={() => {
@@ -323,6 +330,7 @@ export default function KnowledgePanel({
                 </select>
               </label>
             </fieldset>
+            {editing && <KnowledgeImpactPanel id={editing.data.id} api={api} />}
             {error && (
               <p className="alert" role="alert">
                 {error}
@@ -344,6 +352,36 @@ export default function KnowledgePanel({
               )}
             </div>
           </form>
+        </EditorDialog>
+      )}
+      {impact && (
+        <EditorDialog
+          title={`${impact.data.name} · 연결·영향`}
+          busy={false}
+          onClose={() => setImpact(null)}
+        >
+          <KnowledgeImpactPanel
+            key={impact.data.id}
+            id={impact.data.id}
+            api={api}
+            onOpen={
+              onOpenRelated
+                ? (kind, id) => {
+                    setImpact(null);
+                    onOpenRelated(kind, id);
+                  }
+                : undefined
+            }
+          />
+          <div className="form-actions">
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => setImpact(null)}
+            >
+              닫기
+            </button>
+          </div>
         </EditorDialog>
       )}
       {deleting && (

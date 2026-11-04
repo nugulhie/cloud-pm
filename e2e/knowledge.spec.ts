@@ -1,4 +1,9 @@
 import { test, expect } from "@playwright/test";
+test.beforeEach(async ({ page }) => {
+  await page.route("https://fonts.googleapis.com/**", (route) =>
+    route.fulfill({ contentType: "text/css", body: "" }),
+  );
+});
 test("정책과 용어집을 작성·편집·검색하고 PRD에서 참조한다", async ({
   page,
   request,
@@ -6,7 +11,7 @@ test("정책과 용어집을 작성·편집·검색하고 PRD에서 참조한다
   const suffix = Date.now(),
     policyName = `초대 정책 ${suffix}`,
     termName = `초대 ${suffix}`;
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "정책 저장소", exact: true }).click();
   await page.getByRole("button", { name: "＋ 정책 등록" }).click();
   const policy = page.getByRole("dialog", { name: "정책 등록", exact: true });

@@ -5540,3 +5540,130 @@ main > header {
     padding-inline: 0;
   }
 }
+
+/* 정책·용어의 명시적 참조를 통한 변경 검토 */
+.knowledge-impact {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.knowledge-impact > h3 {
+  margin: 0 0 10px;
+}
+.knowledge-impact .muted {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.impact-toolbar,
+.impact-groups,
+.impact-pagination {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.impact-toolbar {
+  justify-content: space-between;
+  margin: 16px 0;
+}
+.impact-toolbar select {
+  min-width: 0;
+  max-width: 100%;
+}
+.impact-groups button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.impact-groups button[aria-pressed="true"] {
+  background: var(--soft);
+  border-color: var(--green);
+  color: var(--green);
+  font-weight: 600;
+}
+.impact-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.impact-items > li {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.impact-item-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.impact-item-heading > div {
+  min-width: 0;
+}
+.impact-item-heading .tag {
+  flex-shrink: 0;
+}
+.impact-title {
+  display: block;
+  font-size: 14px;
+  text-align: left;
+  line-height: 1.6;
+}
+.impact-items p {
+  margin: 6px 0;
+}
+.impact-evidence {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.impact-items a {
+  font-size: 13px;
+}
+.impact-pagination {
+  justify-content: center;
+  margin-top: 16px;
+  font-size: 12px;
+}
+.impact-pagination button {
+  min-height: 36px;
+  padding: 6px 12px;
+}
+@media (max-width: 720px) {
+  .impact-item-heading {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .impact-groups {
+    gap: 6px;
+  }
+  .impact-groups button {
+    padding: 8px 10px;
+  }
+  .impact-toolbar select {
+    width: 100%;
+  }
+}
+.prd-dialog > .knowledge-impact {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.prd-dialog:has(> .knowledge-impact) > .section-title {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+.prd-dialog:has(> .knowledge-impact) > .section-title h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.prd-dialog:has(> .knowledge-impact) > .section-title .icon-button {
+  flex-shrink: 0;
+}

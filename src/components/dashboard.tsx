@@ -108,6 +108,10 @@ export default function Dashboard() {
     [status, setStatus] = useState(""),
     [search, setSearch] = useState(""),
     [repo, setRepo] = useState("");
+  const [requestedRequirement, setRequestedRequirement] = useState<{
+    workspace: string;
+    id: string;
+  } | null>(null);
   const [analysis, setAnalysis] = useState<Awaited<
     ReturnType<Service["analyzeProject"]>
   > | null>(null);
@@ -1272,6 +1276,12 @@ export default function Dashboard() {
                   onRefresh={load}
                   onOpenTask={openTask}
                   knowledge={data.knowledge}
+                  requestedId={
+                    requestedRequirement?.workspace === data.viewer.workspaceId
+                      ? requestedRequirement.id
+                      : undefined
+                  }
+                  onRequestedOpen={() => setRequestedRequirement(null)}
                   onManageProject={(id) => {
                     setProject(id);
                     setManagementKind("project");
@@ -1287,6 +1297,20 @@ export default function Dashboard() {
                   canWrite={canWrite}
                   api={api}
                   onRefresh={load}
+                  onOpenRelated={(kind, id) => {
+                    if (kind === "tasks") {
+                      const task = data.tasks.find((r) => r.data.id === id);
+                      if (task) openTask(task);
+                    } else {
+                      setProject("");
+                      resetFilters();
+                      setRequestedRequirement({
+                        workspace: data.viewer.workspaceId,
+                        id,
+                      });
+                      setTab("PRD 관리");
+                    }
+                  }}
                 />
               )}
               {tab === tabs[0] && (

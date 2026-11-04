@@ -3,7 +3,7 @@ import { createId } from "../core/browser-id";
 import EditorDialog from "./editor-dialog";
 import RequirementCsvImport from "./requirement-csv-import";
 import GitHubAssigneeSelect from "./github-assignee-select";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   requirementStates,
   requirementLabel,
@@ -28,6 +28,8 @@ export default function RequirementsPanel({
   onOpenTask,
   knowledge,
   onManageProject,
+  requestedId,
+  onRequestedOpen,
 }: {
   rows: Stored<Requirement>[];
   publications: Stored<IssuePublication>[];
@@ -41,6 +43,8 @@ export default function RequirementsPanel({
   onOpenTask: (task: Stored<Task>) => void;
   knowledge: Stored<KnowledgeEntry>[];
   onManageProject: (id: string) => void;
+  requestedId?: string;
+  onRequestedOpen?: () => void;
 }) {
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [query, setQuery] = useState(""),
@@ -73,6 +77,16 @@ export default function RequirementsPanel({
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const submitting = useRef(false);
+  useEffect(() => {
+    if (!requestedId) return;
+    const row = rows.find((r) => r.data.id === requestedId);
+    if (row) {
+      setFormProject(row.data.project);
+      setEditing(row);
+      setError("");
+    }
+    onRequestedOpen?.();
+  }, [requestedId, rows, onRequestedOpen]);
   const currentIssueRow =
     rows.find((row) => row.data.id === issueRow?.data.id) ?? issueRow;
   const issueTask = tasks.find(
