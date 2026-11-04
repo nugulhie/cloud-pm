@@ -81,7 +81,28 @@ assumptions:
       https://docs.github.com/en/rest/issues/assignees;
       https://docs.github.com/en/rest/issues/issues#create-an-issue
     updated_at: "2026-11-03"
+  - id: prd-multiple-task-publications
+    status: supported
+    claim: 로컬 HTTP 시나리오에서 하나의 PRD에 연결된 두 태스크를 서로 다른 저장소에 발행하고 같은 태스크의 재발행을 차단했다.
+    reason: 실제 Requirements와 GitHubClient를 실행하고 원격 대체 서버의 저장소별 이슈·담당자 및 내부 연결을 함께 확인했다.
+    verification: >-
+      2026-11-04 Postman CLI 1.80.0으로 tests/prd-multiple-tasks-simulation.ts를 실행했다.
+      HTTP 요청 11개가 모의 서버에 전달됐고 실서비스 통과는 0개였다.
+      org/repo와 org/backend에 각각 이슈 하나가 생성되었으며 다른 담당자와 task 메타데이터를
+      POST 및 후속 GET으로 확인했다. 태스크별 재요청에도 생성은 총 2회였다.
+      내부 PRD taskIds 2개, 발행 기록 2개, 승인 링크 2개를 검증했다.
+      실제 GitHub 원본에는 쓰지 않았다. 공개 소유자 모의 검색은 CLI 미로그인으로 생략하고
+      기존 공식 GitHub 계약 기반 로컬 모의를 두 저장소에 대응하도록 확장했다.
+    source: >-
+      tests/prd-multiple-tasks-simulation.ts; postman/mocks/github-app/default.js;
+      docs/prd-tasks.md; .data/team-planning-20261104/prd-simulation.ndjson;
+      https://docs.github.com/en/rest/issues/issues#create-an-issue
+    updated_at: "2026-11-04"
 fingerprints:
+  - id: prd-multiple-tasks-20261104
+    date: "2026-11-04"
+    commit: null
+    cli: Postman CLI 1.80.0; Node.js 24; 로컬 검증 소스
   # 담당자 기능은 같은 GitHub 대체 서버에 경로를 추가해 아래 별도 실행으로 검증했다.
   - id: github-app-20261102
     date: "2026-11-02"

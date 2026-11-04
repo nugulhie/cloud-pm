@@ -15,6 +15,7 @@ const editable = ({
   number,
   editor,
   taskId,
+  taskIds,
   featureId,
   source,
   ...data

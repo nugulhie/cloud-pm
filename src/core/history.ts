@@ -26,6 +26,8 @@ const fields: Record<string, string> = {
   remarks: "비고",
   editor: "편집자",
   taskId: "연결 태스크",
+  taskIds: "연결 태스크 목록",
+  repository: "담당 저장소",
   content: "내용",
   category: "분류",
   aliases: "별칭",

@@ -9,6 +9,7 @@ import {
 import type { KnowledgeEntry } from "./knowledge-model";
 import {
   requirementLabel,
+  requirementTaskIds,
   type IssuePublication,
   type Requirement,
 } from "./requirement-model";
@@ -229,7 +230,8 @@ export function knowledgeImpact(
         },
         ref,
       );
-      const queue = r.taskId ? [r.taskId] : [];
+      const rootIds = new Set(requirementTaskIds(r));
+      const queue = [...rootIds];
       const visited = new Set<string>();
       while (queue.length) {
         const taskId = queue.pop()!;
@@ -241,7 +243,7 @@ export function knowledgeImpact(
         const taskRef: ImpactReference = {
           ...ref,
           taskId,
-          via: taskId === r.taskId ? "task" : "subtask",
+          via: rootIds.has(taskId) ? "task" : "subtask",
         };
         add(
           {

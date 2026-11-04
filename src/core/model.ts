@@ -39,6 +39,12 @@ export const taskSchema = z.strictObject({
   parentId: id.nullable().optional(),
   dependsOn: z.array(id).max(100).optional(),
   description: z.string().max(8000).default(""),
+  repository: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/)
+    .toLowerCase()
+    .nullable()
+    .optional(),
   assignee: z.string().max(100).default(""),
   status: z
     .enum(["backlog", "ready", "in_progress", "in_review", "done", "canceled"])

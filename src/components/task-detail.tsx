@@ -55,6 +55,12 @@ export default function TaskDetail({
             <TaskDueDate task={value} />
           </dd>
         </div>
+        {value.repository && (
+          <div>
+            <dt>담당 저장소</dt>
+            <dd>{value.repository}</dd>
+          </div>
+        )}
         <div>
           <dt>우선순위</dt>
           <dd>
@@ -70,7 +76,7 @@ export default function TaskDetail({
         {value.description ? (
           <MarkdownBody
             body={value.description}
-            repository={project?.repositories[0] ?? ""}
+            repository={value.repository ?? project?.repositories[0] ?? ""}
           />
         ) : (
           <p className="section-description">등록된 설명이 없습니다.</p>

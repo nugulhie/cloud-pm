@@ -44,7 +44,7 @@ import {
   importAsanaProject,
 } from "./asana-project";
 import { entityPatchInput, inputFields } from "./entity-patch";
-import { requirementInput } from "./requirement-model";
+import { requirementInput, requirementTaskIds } from "./requirement-model";
 import { deletionImpact } from "./deletion-preview";
 import { parseTaskYaml, evaluateTask } from "../completion/index";
 import { GitHubError, GitHubClient } from "../github/client";
@@ -240,6 +240,7 @@ export class Service {
       body: preview.body,
       previewHash: preview.previewHash,
       assignee: preview.assignee,
+      taskId: preview.task.data.id,
     };
   }
   async publishRequirementIssue(input: unknown) {
@@ -728,6 +729,17 @@ export class Service {
         : this.store.get<Feature>("feature", id);
     await assertProject(t.project);
     const previous = await getTask(t.id);
+    if (previous) await assertProject(previous.data.project);
+    if (
+      previous &&
+      previous.data.project !== t.project &&
+      (await this.store.list<Requirement>("requirement")).some((r) =>
+        requirementTaskIds(r.data).includes(t.id),
+      )
+    )
+      throw new DomainError(
+        "PRD에 연결된 태스크의 프로젝트는 변경할 수 없습니다.",
+      );
     if (!t.feature) {
       const parent = t.parentId ? await getTask(t.parentId) : null;
       t.feature =
@@ -749,6 +761,34 @@ export class Service {
       throw new DomainError("프로젝트에 속한 기능을 선택하세요.");
     const existing = previous;
     if (existing) await assertProject(existing.data.project);
+    if (t.repository === undefined)
+      t.repository = existing?.data.repository ?? null;
+    if (t.repository) {
+      const project = await this.store.get<Project>("project", t.project);
+      if (
+        !project?.data.repositories.some(
+          (repo) => repo.toLowerCase() === t.repository!.toLowerCase(),
+        )
+      )
+        throw new DomainError(
+          "태스크 저장소는 프로젝트에 연결된 저장소를 선택하세요.",
+        );
+    }
+    if (existing && t.repository !== (existing.data.repository ?? null)) {
+      const publications =
+        await this.store.list<IssuePublication>("requirement-issue");
+      if (
+        publications.some(
+          (p) =>
+            p.data.task === t.id &&
+            p.data.state !== "failed" &&
+            p.data.repository !== t.repository,
+        )
+      )
+        throw new DomainError(
+          "이슈 발행 이력이 있는 태스크는 해당 저장소를 유지하세요. 다른 저장소의 작업은 별도 태스크로 추가하세요.",
+        );
+    }
     t.type ??= existing?.data.type ?? "feature";
     if (t.parentId === undefined) t.parentId = existing?.data.parentId ?? null;
     const allTasks =
@@ -856,7 +896,7 @@ export class Service {
             : taskSchema;
       const value = schema.parse({ ...row.data, ...data.patch });
       if (
-        "startDate" in value &&
+        "endDate" in value &&
         value.startDate &&
         value.endDate &&
         value.startDate > value.endDate

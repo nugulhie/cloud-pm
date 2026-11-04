@@ -14,6 +14,8 @@ import type { Stored, Project, Feature, Task } from "../core/model";
 import MarkdownBody from "./markdown-body";
 import type { KnowledgeEntry } from "../core/knowledge-model";
 import ReferencePicker from "./reference-picker";
+import RequirementTasksDialog from "./requirement-tasks-dialog";
+import { requirementTaskIds } from "../core/requirement-model";
 
 export { default as EditorDialog } from "./editor-dialog";
 export default function RequirementsPanel({
@@ -61,6 +63,8 @@ export default function RequirementsPanel({
     [repository, setRepository] = useState("");
   const [issueAssignee, setIssueAssignee] = useState(""),
     [issueAssigneeValid, setIssueAssigneeValid] = useState(false);
+  const [managingId, setManagingId] = useState<string | null>(null);
+  const [issueTaskId, setIssueTaskId] = useState("");
   const label = (row: Requirement) =>
     requirementLabel(
       row,
@@ -90,9 +94,20 @@ export default function RequirementsPanel({
   }, [requestedId, rows, onRequestedOpen]);
   const currentIssueRow =
     rows.find((row) => row.data.id === issueRow?.data.id) ?? issueRow;
-  const issueTask = tasks.find(
-    (task) => task.data.id === currentIssueRow?.data.taskId,
-  );
+  const issueTasks = currentIssueRow
+    ? tasks.filter((t) =>
+        requirementTaskIds(currentIssueRow.data).includes(t.data.id),
+      )
+    : [];
+  const issueTask =
+    issueTasks.find((task) => task.data.id === issueTaskId) ??
+    (issueTasks.length === 1 ? issueTasks[0] : undefined);
+  const issuePublication = publications.find(
+    (p) =>
+      p.data.requirement === currentIssueRow?.data.id &&
+      p.data.task === issueTask?.data.id,
+  )?.data;
+  const managingRow = rows.find((r) => r.data.id === managingId);
   const issueProject = projects.find(
     (row) => row.data.id === currentIssueRow?.data.project,
   );
@@ -162,6 +177,37 @@ export default function RequirementsPanel({
     setMode(null);
     setPreview(null);
     setError("");
+  }
+  function openIssue(row: Stored<Requirement>, preferredTask?: Stored<Task>) {
+    const linked = tasks.filter((t) =>
+      requirementTaskIds(row.data).includes(t.data.id),
+    );
+    const task =
+      preferredTask ??
+      linked.find(
+        (t) =>
+          !publications.some(
+            (p) =>
+              p.data.requirement === row.data.id &&
+              p.data.task === t.data.id &&
+              p.data.state !== "failed",
+          ),
+      ) ??
+      linked[0];
+    setIssueRow(row);
+    setIssueTaskId(task?.data.id ?? "");
+    setIssueAssignee(task?.data.assignee ?? row.data.assignee);
+    setIssueAssigneeValid(!(task?.data.assignee ?? row.data.assignee));
+    setRepository(
+      task?.data.repository ??
+        projects.find((p) => p.data.id === row.data.project)?.data
+          .repositories[0] ??
+        "",
+    );
+    setPreview(null);
+    setError("");
+    setManagingId(null);
+    setMode("issue");
   }
   return (
     <section className="prd-panel" aria-label="PRD 관리">
@@ -329,10 +375,13 @@ export default function RequirementsPanel({
           <tbody>
             {visible.map((row) => {
               const r = row.data,
-                publication = publications.find(
-                  (p) => p.data.requirement === r.id,
-                )?.data,
-                task = tasks.find((t) => t.data.id === r.taskId);
+                linkedTasks = tasks.filter((t) =>
+                  requirementTaskIds(r).includes(t.data.id),
+                ),
+                issued = publications.filter(
+                  (p) =>
+                    p.data.requirement === r.id && p.data.state === "created",
+                );
               return (
                 <tr key={r.id}>
                   <td>
@@ -432,54 +481,53 @@ export default function RequirementsPanel({
                   </td>
                   <td className="prd-connections">
                     <div className="prd-row-actions">
-                      {task ? (
+                      <button
+                        className="text-button"
+                        disabled={busy}
+                        onClick={() => setManagingId(r.id)}
+                      >
+                        {linkedTasks.length
+                          ? `태스크 관리 · ${linkedTasks.length}개`
+                          : "＋ 개발 태스크 추가"}
+                      </button>
+                      {linkedTasks.length === 1 && (
                         <button
                           className="text-button"
-                          onClick={() => onOpenTask(task)}
+                          onClick={() => onOpenTask(linkedTasks[0]!)}
                         >
                           태스크 열기
                         </button>
-                      ) : (
-                        <span className="muted">태스크 미전환</span>
                       )}
-                      {publication?.state === "created" ? (
+                      {!linkedTasks.length && (
+                        <small className="muted">태스크 미전환</small>
+                      )}
+                      {!!linkedTasks.length && (
+                        <small>
+                          완료{" "}
+                          {
+                            linkedTasks.filter((t) => t.data.status === "done")
+                              .length
+                          }
+                          /{linkedTasks.length}
+                        </small>
+                      )}
+                      {issued.map(({ data: p }) => (
                         <a
-                          href={publication.url}
+                          key={p.id}
+                          href={p.url}
                           target="_blank"
                           rel="noreferrer"
                         >
-                          이슈 #{publication.number} ↗
+                          {p.repository} #{p.number} ↗
                         </a>
-                      ) : publication &&
-                        ["unknown", "publishing"].includes(
-                          publication.state,
-                        ) ? (
-                        <span className="tag">이슈 원본 확인 필요</span>
-                      ) : (
-                        <button
-                          className="text-button"
-                          disabled={!canWrite || busy}
-                          onClick={() => {
-                            setIssueRow(row);
-                            setIssueAssignee(r.assignee);
-                            setIssueAssigneeValid(!r.assignee);
-                            setRepository(
-                              projects.find((p) => p.data.id === r.project)
-                                ?.data.repositories[0] ?? "",
-                            );
-                            setPreview(null);
-                            setError("");
-                            setMode("issue");
-                          }}
-                        >
-                          GitHub 이슈 생성
-                        </button>
-                      )}
-                      {publication?.assignmentWarning && (
-                        <small role="status" className="alert">
-                          {publication.assignmentWarning}
-                        </small>
-                      )}
+                      ))}
+                      <button
+                        className="text-button"
+                        disabled={!canWrite || busy}
+                        onClick={() => openIssue(row)}
+                      >
+                        GitHub 이슈 생성
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -656,7 +704,10 @@ export default function RequirementsPanel({
             선택한 {checked.length}개 항목의 상세설명·정책·비고·담당자를
             태스크에 복사합니다. 이미 전환된 항목은 중복 생성하지 않습니다.
           </p>
-          <p>각 PRD를 프로젝트의 태스크 하나로 등록합니다.</p>
+          <p>
+            각 PRD에 기본 태스크 하나를 만듭니다. 추가 작업은 ‘태스크 관리’에서
+            담당자·저장소별로 나눌 수 있습니다.
+          </p>
           {error && (
             <p className="alert" role="alert">
               {error}
@@ -732,10 +783,11 @@ export default function RequirementsPanel({
       {mode === "issue" && currentIssueRow && (
         <EditorDialog title="GitHub 이슈 생성" busy={busy} onClose={close}>
           <p>
-            선택한 저장소에 실제 이슈를 생성합니다. 연결된 GitHub 토큰에 해당
-            저장소의 Issues 쓰기 권한이 필요합니다.
+            선택한 태스크의 저장소에 실제 이슈를 생성합니다. 이슈는 해당
+            태스크에 연결되며 PRD에서도 모아 볼 수 있습니다. 연결된 GitHub
+            토큰에 해당 저장소의 Issues 쓰기 권한이 필요합니다.
           </p>
-          {!issueTask && (
+          {!issueTasks.length && (
             <div className="demo-banner">
               <strong>먼저 PRD를 태스크로 전환해 주세요.</strong>
               <p>
@@ -745,6 +797,56 @@ export default function RequirementsPanel({
               </p>
             </div>
           )}
+          {!!issueTasks.length && (
+            <label>
+              대상 태스크
+              <select
+                aria-label="이슈 대상 태스크"
+                disabled={busy}
+                value={issueTask?.data.id ?? ""}
+                onChange={(e) => {
+                  const task = issueTasks.find(
+                    (t) => t.data.id === e.target.value,
+                  );
+                  setIssueTaskId(e.target.value);
+                  setIssueAssignee(task?.data.assignee ?? "");
+                  setIssueAssigneeValid(!task?.data.assignee);
+                  setRepository(
+                    task?.data.repository ??
+                      issueProject?.data.repositories[0] ??
+                      "",
+                  );
+                  setPreview(null);
+                  setError("");
+                }}
+              >
+                <option value="" disabled>
+                  태스크를 선택하세요
+                </option>
+                {issueTasks.map((t) => (
+                  <option key={t.data.id} value={t.data.id}>
+                    {t.data.title}
+                    {t.data.repository ? ` · ${t.data.repository}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {issuePublication?.state === "created" && (
+            <p className="notice">
+              이미 발행한 이슈입니다.{" "}
+              <a href={issuePublication.url} target="_blank" rel="noreferrer">
+                {issuePublication.repository} #{issuePublication.number} ↗
+              </a>
+            </p>
+          )}
+          {issuePublication &&
+            ["unknown", "publishing"].includes(issuePublication.state) && (
+              <p className="alert">
+                이 태스크의 이슈 생성 결과를 GitHub 원본에서 확인해야 합니다.
+                중복 발행을 막기 위해 다시 생성할 수 없습니다.
+              </p>
+            )}
           {!issueProject?.data.repositories.length && (
             <div className="alert" role="status">
               <strong>프로젝트에 연결된 GitHub 저장소가 없습니다.</strong>
@@ -770,7 +872,7 @@ export default function RequirementsPanel({
             <select
               aria-label="이슈 대상 저장소"
               value={repository}
-              disabled={busy}
+              disabled={busy || !!issueTask?.data.repository}
               onChange={(e) => {
                 setRepository(e.target.value);
                 setPreview(null);
@@ -785,7 +887,7 @@ export default function RequirementsPanel({
             </select>
           </label>
           <GitHubAssigneeSelect
-            key={`issue-assignee-${currentIssueRow.data.id}-${repository}`}
+            key={`issue-assignee-${currentIssueRow.data.id}-${issueTask?.data.id}-${repository}`}
             api={api}
             project={currentIssueRow.data.project}
             repository={repository || undefined}
@@ -798,8 +900,8 @@ export default function RequirementsPanel({
             onValidityChange={setIssueAssigneeValid}
           />
           <small>
-            PRD 담당자를 기본 선택합니다. 여기서 바꾸면 이번에 생성하는 GitHub
-            이슈에 적용됩니다.
+            태스크 담당자를 기본 선택합니다. 여기서 바꾸면 이번에 생성하는
+            GitHub 이슈에 적용됩니다.
           </small>
           {preview && (
             <article className="prd-issue-preview">
@@ -823,7 +925,7 @@ export default function RequirementsPanel({
             >
               취소
             </button>
-            {!issueTask ? (
+            {!issueTasks.length ? (
               <button
                 className="button"
                 disabled={busy || !canWrite}
@@ -847,16 +949,20 @@ export default function RequirementsPanel({
               >
                 {busy ? "태스크 전환 중…" : "태스크로 전환하고 계속"}
               </button>
-            ) : !preview ? (
+            ) : issuePublication &&
+              issuePublication.state !== "failed" ? null : !preview ? (
               <button
                 className="button"
-                disabled={busy || !repository || !issueAssigneeValid}
+                disabled={
+                  busy || !issueTask || !repository || !issueAssigneeValid
+                }
                 onClick={() =>
                   void run(async () =>
                     setPreview(
                       await api("requirements/issue-preview", {
                         id: currentIssueRow.data.id,
                         revision: currentIssueRow.revision,
+                        taskId: issueTask?.data.id,
                         repository,
                         assignee: issueAssignee,
                       }),
@@ -875,6 +981,7 @@ export default function RequirementsPanel({
                     const result = await api("requirements/issue", {
                       id: currentIssueRow.data.id,
                       revision: currentIssueRow.revision,
+                      taskId: issueTask?.data.id,
                       repository,
                       assignee: issueAssignee,
                       previewHash: preview.previewHash,
@@ -892,6 +999,26 @@ export default function RequirementsPanel({
             )}
           </div>
         </EditorDialog>
+      )}
+      {managingRow && (
+        <RequirementTasksDialog
+          key={managingRow.data.id}
+          row={managingRow}
+          project={
+            projects.find((p) => p.data.id === managingRow.data.project)?.data
+          }
+          tasks={tasks}
+          publications={publications}
+          canWrite={canWrite}
+          api={api}
+          onRefresh={onRefresh}
+          onClose={() => setManagingId(null)}
+          onOpenTask={(task) => {
+            setManagingId(null);
+            onOpenTask(task);
+          }}
+          onIssue={(task) => openIssue(managingRow, task)}
+        />
       )}
     </section>
   );

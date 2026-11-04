@@ -24,6 +24,7 @@ import {
   publishInput,
   requirementLabel,
   requirementBody,
+  requirementTaskIds,
   type Requirement,
   type IssuePublication,
 } from "./requirement-model";
@@ -129,6 +130,7 @@ export class Requirements {
         editor: this.actor.name,
         featureId: old?.data.featureId ?? null,
         taskId: old?.data.taskId ?? null,
+        taskIds: old ? requirementTaskIds(old.data) : [],
         ...((source ?? old?.data.source)
           ? { source: source ?? old?.data.source }
           : {}),
@@ -256,14 +258,21 @@ export class Requirements {
       throw new DomainError("중복 항목을 확인하세요.");
     for (const entry of entries) {
       const row = await this.row(entry.id, entry.revision);
-      if (row.data.taskId && (await this.store.get("task", row.data.taskId)))
+      if (
+        (
+          await Promise.all(
+            requirementTaskIds(row.data).map((id) =>
+              this.store.get("task", id),
+            ),
+          )
+        ).some(Boolean)
+      )
         throw new DomainError(
           "태스크로 전환된 PRD는 삭제할 수 없습니다. 보류 상태로 관리하세요.",
         );
-      const publication = await this.store.get<IssuePublication>(
-        "requirement-issue",
-        entry.id,
-      );
+      const publication = (
+        await this.store.list<IssuePublication>("requirement-issue")
+      ).find((p) => p.data.requirement === entry.id);
       if (publication)
         throw new DomainError(
           "GitHub 이슈 발행 이력이 있는 PRD는 보류 상태로 관리하세요.",
@@ -281,29 +290,52 @@ export class Requirements {
     saveFeature: (feature: unknown) => Promise<unknown>,
   ) {
     requireWrite(this.actor);
-    const { entries, feature } = conversionInput.parse(input);
+    const {
+      entries,
+      feature,
+      tasks: requestedTasks,
+    } = conversionInput.parse(input);
     if (new Set(entries.map((e) => e.id)).size !== entries.length)
       throw new DomainError("중복 항목을 확인하세요.");
+    if (requestedTasks && entries.length !== 1)
+      throw new DomainError(
+        "태스크를 나누어 추가할 때는 PRD 하나를 선택하세요.",
+      );
+    if (
+      requestedTasks &&
+      new Set(requestedTasks.map((t) => t.id)).size !== requestedTasks.length
+    )
+      throw new DomainError("추가할 태스크 ID가 중복되었습니다.");
     const rows = [];
     for (const e of entries) rows.push(await this.row(e.id, e.revision));
     const results = [];
     for (const row of rows) {
       const projectPrefix = (await this.access(row.data.project)).data
         .featurePrefix;
-      if (row.data.taskId && (await this.store.get("task", row.data.taskId))) {
+      const linkedIds = requirementTaskIds(row.data);
+      const existingTasks = (
+        await Promise.all(
+          linkedIds.map((id) => this.store.get<Task>("task", id)),
+        )
+      ).filter((t) => !!t && t.data.project === row.data.project);
+      if (!requestedTasks && existingTasks.length) {
         results.push({
           id: row.data.id,
-          task: row.data.taskId,
+          task: existingTasks[0]!.data.id,
+          tasks: existingTasks.map((t) => t!.data.id),
           created: false,
         });
         continue;
       }
-      if (row.data.taskId)
+      if (!requestedTasks && linkedIds.length)
         throw new DomainError(
           "연결 태스크가 삭제되었습니다. 새로운 PRD 항목으로 다시 등록하세요.",
         );
-      let featureId = feature;
-      if (!featureId) {
+      let featureId = feature ?? row.data.featureId;
+      if (
+        !featureId ||
+        (!feature && !(await this.store.get("feature", featureId)))
+      ) {
         featureId = `prd-feature-${row.data.id}`;
         if (!(await this.store.get("feature", featureId)))
           await saveFeature({
@@ -313,28 +345,81 @@ export class Requirements {
             goal: row.data.description,
           });
       }
-      const taskId = `prd-task-${row.data.id}`;
-      await saveTask({
-        id: taskId,
-        project: row.data.project,
-        feature: featureId,
-        title: `[${requirementLabel(row.data, projectPrefix)}] ${row.data.featureName}`,
-        description: requirementBody(
-          row.data,
-          this.store.workspaceId,
-          undefined,
-          projectPrefix,
-        ),
-        assignee: row.data.assignee,
-      });
+      const drafts = requestedTasks ?? [
+        {
+          id: `prd-task-${row.data.id}`,
+          title: `[${requirementLabel(row.data, projectPrefix)}] ${row.data.featureName}`,
+        },
+      ];
+      const createdIds: string[] = [];
+      for (const draft of drafts) {
+        const existing = await this.store.get<Task>("task", draft.id);
+        if (existing) {
+          if (
+            !linkedIds.includes(draft.id) ||
+            existing.data.project !== row.data.project
+          )
+            throw new DomainError(
+              "이미 사용 중인 태스크 ID입니다. 새로운 ID로 다시 추가하세요.",
+              409,
+            );
+          continue;
+        }
+        // 삭제된 태스크의 ID를 재사용하면 과거 이슈가 새 작업으로 연결될 수 있다.
+        if (linkedIds.includes(draft.id))
+          throw new DomainError(
+            "삭제된 태스크의 ID는 재사용할 수 없습니다.",
+            409,
+          );
+        await saveTask({
+          id: draft.id,
+          project: row.data.project,
+          feature: featureId,
+          title: draft.title,
+          description:
+            draft.description ??
+            requirementBody(
+              row.data,
+              this.store.workspaceId,
+              undefined,
+              projectPrefix,
+            ),
+          assignee: draft.assignee ?? row.data.assignee,
+          repository: draft.repository ?? null,
+        });
+        createdIds.push(draft.id);
+      }
+      const taskIds = [...new Set([...linkedIds, ...drafts.map((t) => t.id)])];
+      if (!createdIds.length) {
+        results.push({
+          id: row.data.id,
+          task: taskIds[0]!,
+          tasks: taskIds,
+          created: false,
+          createdTasks: [],
+        });
+        continue;
+      }
       await this.store.save(
         "requirement",
         row.data.id,
-        { ...row.data, featureId, taskId, editor: this.actor.name },
+        {
+          ...row.data,
+          featureId,
+          taskId: row.data.taskId ?? taskIds[0]!,
+          taskIds,
+          editor: this.actor.name,
+        },
         this.actor.name,
         row.revision,
       );
-      results.push({ id: row.data.id, task: taskId, created: true });
+      results.push({
+        id: row.data.id,
+        task: taskIds[0]!,
+        tasks: taskIds,
+        created: true,
+        createdTasks: createdIds,
+      });
     }
     return { results };
   }
@@ -345,18 +430,29 @@ export class Requirements {
       repository,
       previewHash,
       assignee: requestedAssignee,
+      taskId: requestedTaskId,
     } = publishInput.parse(input);
     const row = await this.row(id, revision);
     const project = await this.access(row.data.project);
     const repo = repository.toLowerCase();
     if (!project.data.repositories.includes(repo))
       throw new DomainError("프로젝트에 연결된 저장소를 선택하세요.", 403);
-    const task = row.data.taskId
-      ? await this.store.get<Task>("task", row.data.taskId)
+    const ids = requirementTaskIds(row.data);
+    if (requestedTaskId && !ids.includes(requestedTaskId))
+      throw new DomainError("이 PRD에 연결된 태스크를 선택하세요.");
+    if (!requestedTaskId && ids.length > 1)
+      throw new DomainError(
+        "여러 태스크 중 이슈를 생성할 태스크를 선택하세요.",
+      );
+    const taskId = requestedTaskId ?? ids[0];
+    const task = taskId
+      ? await this.store.get<Task>("task", taskId)
       : undefined;
     if (!task || task.data.project !== row.data.project)
       throw new DomainError("먼저 PRD를 태스크로 전환하세요.");
-    const assignee = requestedAssignee ?? row.data.assignee;
+    if (task.data.repository && task.data.repository.toLowerCase() !== repo)
+      throw new DomainError("태스크에 지정된 저장소를 선택하세요.");
+    const assignee = requestedAssignee ?? task.data.assignee;
     if (assignee && !/^[A-Za-z0-9_-]{1,100}$/.test(assignee))
       throw new DomainError(
         "이슈 담당자를 GitHub 사용자 목록에서 다시 선택하세요.",
@@ -375,7 +471,16 @@ export class Requirements {
           `### ${document.data.kind === "policy" ? "관련 정책" : "관련 용어"}: ${document.data.name}\n\n${document.data.content.slice(0, 2000)}${document.data.content.length > 2000 ? "\n\n(2000자 발췌 · 원문은 워크스페이스 문서에서 확인)" : ""}\n\n문서 ID: ${documentId}`,
         );
     }
-    const title = `[${requirementLabel(row.data, project.data.featurePrefix)}] ${row.data.featureName}`;
+    const prefix = `[${requirementLabel(row.data, project.data.featurePrefix)}]`;
+    const taskTitle = task.data.title.replace(
+      /^\[(?:[A-Z0-9]{5}-\d+|PRD-\d+)\]\s*/,
+      "",
+    );
+    const title = (
+      task.data.title.startsWith(`${prefix} `)
+        ? task.data.title
+        : `${prefix} ${taskTitle}`
+    ).slice(0, 300);
     const body = [
       requirementBody(
         { ...row.data, assignee },
@@ -386,7 +491,15 @@ export class Requirements {
       ...references,
     ].join("\n\n");
     const hash = createHash("sha256")
-      .update(JSON.stringify({ repository: repo, title, body, assignee }))
+      .update(
+        JSON.stringify({
+          repository: repo,
+          title,
+          body,
+          assignee,
+          taskRevision: task.revision,
+        }),
+      )
       .digest("hex");
     if (previewHash && previewHash !== hash)
       throw new DomainError(
@@ -403,17 +516,37 @@ export class Requirements {
       assignee,
     };
   }
+  private async publication(row: Requirement, taskId: string) {
+    const legacy = await this.store.get<IssuePublication>(
+      "requirement-issue",
+      row.id,
+    );
+    if (legacy?.data.task === taskId) return { id: row.id, prior: legacy };
+    if (!legacy && row.taskId === taskId)
+      return { id: row.id, prior: undefined };
+    const key = `task-${createHash("sha256").update(`${row.id}:${taskId}`).digest("hex")}`;
+    return {
+      id: key,
+      prior: await this.store.get<IssuePublication>("requirement-issue", key),
+    };
+  }
   async publish(input: unknown, client: GitHubClient) {
     requireWrite(this.actor);
     if (demoMode())
       throw new DomainError("데모에서는 실제 GitHub 이슈를 생성하지 않습니다.");
     const initial = await this.preview(input);
-    const priorPublication = await this.store.get<IssuePublication>(
-      "requirement-issue",
-      initial.row.data.id,
+    const { prior: priorPublication } = await this.publication(
+      initial.row.data,
+      initial.task.data.id,
     );
-    if (priorPublication?.data.state === "created")
+    if (priorPublication?.data.state === "created") {
+      if (priorPublication.data.repository !== initial.repository)
+        throw new DomainError(
+          "이 태스크는 다른 저장소에 이미 이슈가 있습니다. 다른 저장소의 작업은 새 태스크로 추가하세요.",
+          409,
+        );
       return priorPublication.data;
+    }
     if (initial.assignee) {
       let assignable: boolean;
       try {
@@ -443,9 +576,10 @@ export class Requirements {
         [store.workspaceId],
       );
       const snapshot = await new Requirements(store, this.actor).preview(input);
-      const prior = await store.get<IssuePublication>(
-        "requirement-issue",
-        snapshot.row.data.id,
+      const requirements = new Requirements(store, this.actor);
+      const { id: publicationId, prior } = await requirements.publication(
+        snapshot.row.data,
+        snapshot.task.data.id,
       );
       if (prior && prior.data.state !== "failed") {
         if (prior.data.state === "created") return { existing: prior.data };
@@ -455,7 +589,7 @@ export class Requirements {
         );
       }
       const publication: IssuePublication = {
-        id: snapshot.row.data.id,
+        id: publicationId,
         requirement: snapshot.row.data.id,
         project: snapshot.row.data.project,
         task: snapshot.task.data.id,
@@ -464,7 +598,7 @@ export class Requirements {
       };
       const claimed = await store.save(
         "requirement-issue",
-        snapshot.row.data.id,
+        publicationId,
         publication,
         this.actor.name,
         prior?.revision,
@@ -496,7 +630,7 @@ export class Requirements {
           [400, 401, 403, 404, 410, 422].includes(error.status));
       await this.store.save(
         "requirement-issue",
-        row.data.id,
+        publication.id,
         { ...publication, state: definite ? "failed" : "unknown" },
         this.actor.name,
         claimed!.revision,
@@ -543,7 +677,7 @@ export class Requirements {
     await this.store.transaction(async (store) => {
       await store.save(
         "requirement-issue",
-        row.data.id,
+        publication.id,
         result,
         this.actor.name,
         claimed.revision,

@@ -2,6 +2,7 @@
 const http = require("http");
 let issued = 0,
   revoked = false;
+let multiRepo = false;
 const issues = [];
 http
   .createServer(async (req, res) => {
@@ -15,6 +16,10 @@ http
     if (path === "/__mock/revoke" && req.method === "POST") {
       revoked = true;
       return respond(200, { revoked });
+    }
+    if (path === "/__mock/enable-multi-repo" && req.method === "POST") {
+      multiRepo = true;
+      return respond(200, { multiRepo });
     }
     if (revoked)
       return respond(403, {
@@ -61,14 +66,20 @@ http
     }
     if (!/^Bearer app-http-token-\d+$/.test(req.headers.authorization || ""))
       return respond(401, { message: "Bad credentials" });
-    if (path === "/repos/org/repo/assignees" && req.method === "GET")
+    if (
+      /^\/repos\/org\/(repo|backend)\/assignees$/.test(path) &&
+      req.method === "GET"
+    )
       return respond(200, [
         { login: "developer", type: "User" },
         { login: "other-dev", type: "User" },
         { login: "ignored-user", type: "User" },
         { login: "helper[bot]", type: "Bot" },
       ]);
-    if (path.startsWith("/repos/org/repo/assignees/") && req.method === "GET") {
+    if (
+      /^\/repos\/org\/(repo|backend)\/assignees\//.test(path) &&
+      req.method === "GET"
+    ) {
       const login = path.split("/").at(-1);
       if (["developer", "other-dev", "ignored-user"].includes(login)) {
         res.writeHead(204);
@@ -78,10 +89,17 @@ http
     }
     if (path === "/installation/repositories" && req.method === "GET")
       return respond(200, {
-        total_count: 1,
-        repositories: [{ full_name: "org/repo" }],
+        total_count: multiRepo ? 2 : 1,
+        repositories: [
+          { full_name: "org/repo" },
+          ...(multiRepo ? [{ full_name: "org/backend" }] : []),
+        ],
       });
-    if (path === "/repos/org/repo/issues" && req.method === "POST") {
+    if (
+      /^\/repos\/org\/(repo|backend)\/issues$/.test(path) &&
+      req.method === "POST"
+    ) {
+      const repository = path.split("/").slice(2, 4).join("/");
       let data;
       try {
         data = req.body;
@@ -96,18 +114,26 @@ http
           number,
           title: data.title,
           body: data.body || "",
-          html_url: `https://github.com/org/repo/issues/${number}`,
+          html_url: `https://github.com/${repository}/issues/${number}`,
           user: { login: "cloud-pm-agent[bot]" },
           updated_at: new Date().toISOString(),
           assignees: (data.assignees ?? [])
             .filter((login) => login !== "ignored-user")
             .map((login) => ({ login })),
         };
-      issues.push(issue);
+      issues.push({ repository, issue });
       return respond(201, issue);
     }
-    if (path === "/repos/org/repo/issues" && req.method === "GET")
-      return respond(200, issues);
+    if (
+      /^\/repos\/org\/(repo|backend)\/issues$/.test(path) &&
+      req.method === "GET"
+    )
+      return respond(
+        200,
+        issues
+          .filter((r) => r.repository === path.split("/").slice(2, 4).join("/"))
+          .map((r) => r.issue),
+      );
     return respond(501, { message: "Unsupported contract path" });
   })
   .listen(process.env.PORT || 4912);

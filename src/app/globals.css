@@ -5792,3 +5792,43 @@ main > header {
 .impact-policy-relations[open] > summary {
   margin-bottom: 12px;
 }
+.prd-linked-tasks {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.prd-linked-tasks li,
+.prd-task-draft {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.prd-linked-tasks small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.prd-linked-tasks .text-button {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.prd-task-drafts {
+  display: grid;
+  gap: 1rem;
+  border: 0;
+  padding: 1rem 0;
+  min-width: 0;
+}
+.prd-task-draft label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.prd-task-draft input,
+.prd-task-draft select {
+  width: 100%;
+  min-width: 0;
+}

@@ -40,6 +40,7 @@ export type Requirement = z.infer<typeof requirementInput> & {
   editor: string;
   featureId: string | null;
   taskId: string | null;
+  taskIds?: string[];
   source?: { fileName: string; editedAt: string | null; editor: string };
 };
 export type IssuePublication = {
@@ -61,10 +62,29 @@ export const requirementEntries = z
 export const conversionInput = z.strictObject({
   entries: requirementEntries,
   feature: id.nullable().default(null),
+  tasks: z
+    .array(
+      z.strictObject({
+        id,
+        title: z.string().trim().min(1).max(300),
+        description: z.string().max(8000).optional(),
+        repository: z
+          .string()
+          .regex(/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/)
+          .toLowerCase()
+          .nullable()
+          .optional(),
+        assignee: z.string().trim().max(100).optional(),
+      }),
+    )
+    .min(1)
+    .max(20)
+    .optional(),
 });
 export const publishInput = z.strictObject({
   id,
   revision: z.number().int().positive(),
+  taskId: id.optional(),
   repository: z.string().regex(/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/),
   assignee: z.string().trim().max(100).optional(),
   previewHash: z
@@ -74,6 +94,11 @@ export const publishInput = z.strictObject({
 });
 export const requirementNumber = (number: number) =>
   `PRD-${String(number).padStart(3, "0")}`;
+export const requirementTaskIds = (
+  row: Pick<Requirement, "taskId" | "taskIds">,
+) => [
+  ...new Set([...(row.taskId ? [row.taskId] : []), ...(row.taskIds ?? [])]),
+];
 export const requirementLabel = (
   row: Pick<Requirement, "number" | "sourceId">,
   prefix?: string,
@@ -86,7 +111,7 @@ export function requirementBody(
   workspace: string,
   task?: Task,
   prefix?: string,
-) {
+): string {
   return [
     `## ${requirementLabel(row, prefix)} · ${row.featureName}`,
     ...(row.sourceId ? [`원본 ID: ${row.sourceId}`] : []),
@@ -99,6 +124,14 @@ export function requirementBody(
     `PRD 상태: ${requirementStates[row.status]}\n담당자: ${row.assignee || "미지정"}`,
     ...(task
       ? [
+          "### 개발 태스크",
+          task.title,
+          ...(task.description &&
+          task.description !==
+            requirementBody(row, workspace, undefined, prefix)
+            ? [task.description]
+            : []),
+          `태스크 담당자: ${task.assignee || "미지정"}`,
           "### Cloud PM 연결",
           "```yaml\n" +
             stringify({

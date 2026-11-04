@@ -472,6 +472,7 @@ export default function Dashboard() {
             parentId: val("parentId") || null,
             dependsOn: f.getAll("dependsOn").map(String),
             description: val("description"),
+            repository: val("repository") || null,
             assignee: val("assignee"),
             status: val("status"),
             priority: val("priority"),
@@ -2230,6 +2231,28 @@ export default function Dashboard() {
                         />
                       </label>
                       <div className="form-grid">
+                        <label>
+                          담당 저장소
+                          <select
+                            name="repository"
+                            aria-label="태스크 담당 저장소"
+                            key={`task-repository-${formProject}`}
+                            defaultValue={
+                              editing?.data.project === formProject
+                                ? (editing.data.repository ?? "")
+                                : ""
+                            }
+                          >
+                            <option value="">미지정</option>
+                            {projects
+                              .find((p) => p.data.id === formProject)
+                              ?.data.repositories.map((repo) => (
+                                <option key={repo} value={repo}>
+                                  {repo}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
                         <GitHubAssigneeSelect
                           key={`assignee-${editing?.data.id ?? newTaskId}-${formProject}`}
                           api={api}

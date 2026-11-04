@@ -151,7 +151,7 @@ export function createMcpServer(service: Service) {
       "convert_requirements_to_tasks",
       {
         description:
-          "선택한 PRD를 태스크로 전환. feature를 생략하면 PRD별 기능을 함께 생성. 기존 태스크는 중복 생성하지 않는다.",
+          "PRD별 기본 태스크 생성. 한 PRD에 여러 작업을 추가하려면 entries 하나와 tasks 배열(id/title/repository/assignee)을 지정한다. 기존 연결은 유지하며 같은 ID는 중복 생성하지 않는다.",
         inputSchema: conversionInput.shape,
       },
       async (input) => result(await service.convertRequirements(input)),
@@ -169,7 +169,7 @@ export function createMcpServer(service: Service) {
       "preview_requirement_issue",
       {
         description:
-          "PRD로 생성할 GitHub 이슈의 저장소·제목·본문 미리보기. 외부 쓰기 없음.",
+          "PRD의 개별 태스크로 생성할 GitHub 이슈 미리보기. 여러 태스크가 연결된 PRD는 taskId 필수. 태스크의 저장소·제목·설명·담당자를 사용한다. 외부 쓰기 없음.",
         inputSchema: publishInput.shape,
         annotations: read,
       },
@@ -179,7 +179,7 @@ export function createMcpServer(service: Service) {
       "publish_requirement_issue",
       {
         description:
-          "실제 GitHub 이슈를 생성하고 태스크에 연결한다. 사용자가 대상 저장소와 내용을 확인하고 생성을 요청했을 때만 사용. 연결된 GitHub 토큰의 Issues 쓰기 권한 필요.",
+          "선택한 PRD의 taskId에 GitHub 이슈를 생성·연결한다. 중복 방지는 태스크별이며 다른 태스크는 별도 저장소에 발행할 수 있다. 사용자가 대상 태스크·저장소와 내용을 확인하고 생성을 요청했을 때만 사용. Issues 쓰기 권한 필요.",
         inputSchema: publishInput.shape,
         annotations: {
           readOnlyHint: false,
