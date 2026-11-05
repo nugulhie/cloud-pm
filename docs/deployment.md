@@ -252,3 +252,36 @@ UX·디자인 병렬 점검과 화면 재검토를 반영했다. 태스크는 �
 GitHub 네이티브 블로커는 이번 배포에 포함하지 않았다. 내부 태스크의 동일 프로젝트 선행·후행 관계와 차단 사유는 지원하며, GitHub App은 Issues 쓰기 권한이 있지만 `issue_dependencies`를 구독하지 않는다. 조회/양방향 연동 범위와 App 이벤트 구독이 추가 작업이다.
 
 운영 새 번들 포함·이미지 digest 일치, 앱·DB healthy와 작업자 running, 재시작·OOM 없음, edited 작업 3건 완료를 확인했다. 점검 시 큐 1,125건 모두 완료였고 외부 HTTPS Postman 검사 3개도 통과했다. 배포 임시 S3 객체·버킷과 로컬 이미지 압축본·업로드 설정을 정리했다.
+
+### 2026-11-05: ARM64 EC2로 운영 이전
+
+기존 `cloud-pm.soldoc.co.kr` 도메인·ALB·인증서·GitHub App을 유지하고 새 EC2
+`i-0d478cc462d8b6f4e`(`t4g.small`, ARM64, 암호화 gp3 32GiB)로 앱·작업자·DB를 이전했다.
+실행 경로와 Compose는 `/opt/cloud-pm-agent`·`compose.ec2.yaml`이며 릴리스는
+`team-planning-20261105-arm64`다. 같은 소스에서 ARM64 이미지를 다시 빌드했다.
+웹 구성 digest는 `sha256:42bda431e92c8d1941c554c3c3de49a7eacc058211160eaf50f4b53a9f16abc5`,
+작업자는 `sha256:32a4e74b0c6b895250a87b5cd91f90edfdd923ab6758626dd9c238e6518c8fe7`이다.
+
+최종 복원 시 계정 8개·업무 레코드 17,536개·변경 이력 34,123개·큐 작업 2,695개를 확인했다.
+사용자 전체 행과 소유권·멤버 권한의 digest, 세션 수, 종류별 업무 데이터 수가 쓰기를 멈춘
+원본과 일치했다. `TOKEN_ENCRYPTION_KEY`·App 개인 키·OAuth Secret·웹훅 secret은 보존하고
+새 서버의 RELEASE만 변경했다. GitHub App으로 저장소 59개 접근도 확인했다.
+
+`cloud-pm-arm64-20261105` 전용 대상 그룹을 만들고 Cloud PM 호스트 규칙과 웹훅 규칙
+100~103의 대상만 새 그룹으로 전환했다. 웹훅의 원래 조건과 리스너 기본 동작·기존 공용
+대상 그룹은 유지했다. 기존 nginx의 `/health`는 남은 호스트의 nginx 가용성을 확인하도록
+분리해 공용 대상도 healthy를 유지한다. 새 그룹의 `/health`는 새 앱·DB를 확인한다.
+새 호스트의 접근 로그는 쿼리 문자열을 기록하지 않도록 구성했다.
+
+실제 도메인의 페이지·DB 헬스·OAuth 공개 설정과 인증 없는 계획 API 차단을 확인했다.
+Postman HTTPS 헬스 검사 3개를 통과했으며 새 앱·작업자·DB의 OOM과 재시작은 없었다.
+점검 중 실패한 GitHub 웹훅 9건은 재전송 후 모두 2xx 수신과 큐 처리를 확인했다.
+확인 시 전체 큐 2,707건이 완료됐고 대기·실패 작업은 없었다. 복원 연습용 DB·전송 파일과
+임시 S3 객체·버킷은 정리하고 최종 백업은 보존했다.
+실제 GitHub 사용자 동의와 Claude 채팅 연결은 각 사용자 계정에서 최종 확인한다.
+
+양쪽 서버의 최종 DB·원래 환경 파일·검증 manifest는
+`/var/backups/cloud-pm-agent/ec2-arm64-20261105/final`에 권한 600으로 보관한다.
+기존 `i-0ea0fe35a37c9d3cd`는 다른 서비스와 공용 nginx를 위해 계속 운영하고 Cloud PM
+app·worker만 중지했다. 새 서버에서 쓰기를 재개했으므로 이전 DB로 경로만 되돌리지 않고,
+문제 발생 시 새 데이터를 보존하는 역이관 절차를 따른다. [EC2 이전 절차](ec2-migration.md)를 참고한다.

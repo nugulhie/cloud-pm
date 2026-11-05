@@ -264,4 +264,4 @@ docker compose -p cloud-pm-production --env-file deploy/.env.external-db -f comp
 
 ## 8. 이 문서에서 검증한 범위
 
-격리된 PostgreSQL 18 두 개와 운영 버전의 웹 이미지로 외부 DB 기동, 최초 소유자·일반 멤버 생성, 관리자 승격, `pg_dump -Fc`·`pg_restore`를 확인했다. 복원 후 사용자 ID·비밀번호 로그인·권한·GitHub 계정 연결 정보·기존 세션을 보존했다. Compose의 DB 주소 일치·로컬 DB 서비스 부재·OAuth Secret의 앱 전용 전달도 확인했다. 실제 이전 대상의 TLS·방화벽·DNS·GitHub OAuth·Claude 연결은 목적지가 정해진 뒤 별도로 검증한다. 이번 작업에서 운영 DB·소유권·GitHub App 설정은 변경하지 않았다.
+격리된 PostgreSQL 18 두 개와 운영 버전의 웹 이미지로 외부 DB 기동, 최초 소유자·일반 멤버 생성, 관리자 승격, `pg_dump -Fc`·`pg_restore`를 확인했다. 복원 후 사용자 ID·비밀번호 로그인·권한·GitHub 계정 연결 정보·기존 세션을 보존했다. Compose의 DB 주소 일치·로컬 DB 서비스 부재·OAuth Secret의 앱 전용 전달도 확인했다. 이후 실제 EC2 전환에서도 계정·권한·암호화된 연결 정보의 보존을 검증하고 HTTPS·GitHub App 인증·웹훅 수신을 확인했다. 실제 사용자 계정의 GitHub 로그인·Claude 채팅 동작은 해당 계정에서 최종 확인한다. [EC2 전환 결과](deployment.md#2026-11-05-arm64-ec2로-운영-이전)에 현재 실행 환경과 백업 위치를 기록했다.

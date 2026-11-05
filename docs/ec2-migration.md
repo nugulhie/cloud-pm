@@ -1,6 +1,6 @@
 # 기존 도메인을 유지하고 새 EC2로 이전하기
 
-대상은 `cloud-pm.soldoc.co.kr`의 기존 서비스다. 새 EC2에 앱·작업자·PostgreSQL을 옮기며 기존 계정·소유자·데이터·GitHub App을 유지한다. 새 조직의 첫 설정은 [운영 튜토리얼](operations-tutorial.md)을 참고한다. **실제 전환은 새 인스턴스 ID와 점검 시간이 정해진 뒤 수행한다.**
+대상은 `cloud-pm.soldoc.co.kr`의 기존 서비스다. 새 EC2에 앱·작업자·PostgreSQL을 옮기며 기존 계정·소유자·데이터·GitHub App을 유지한다. 새 조직의 첫 설정은 [운영 튜토리얼](operations-tutorial.md)을 참고한다. **2026-11-05 새 ARM64 EC2로 전환을 완료했다.** 기존 Cloud PM app·worker는 중지하고 DB·최종 백업은 보존했다. 아래 절차는 다음 이전의 참고용이며, 복원은 빈 목적지 DB에서 진행한다.
 
 ## 현재 구성과 유지할 항목
 
