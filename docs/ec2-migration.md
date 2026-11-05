@@ -6,17 +6,20 @@
 
 2026-11-05 AWS 조회 기준이다.
 
-| 항목                 | 기존 값                                     |
-| -------------------- | ------------------------------------------- |
-| 리전                 | `ap-northeast-2`                            |
-| 기존 EC2             | `i-0ea0fe35a37c9d3cd`, `t3.micro`, `x86_64` |
-| VPC                  | `vpc-032c508fba5c47150`                     |
-| 기존 서브넷          | `subnet-0ae1f974e15ae353e`                  |
-| 기존 ALB             | `alb-internal-bastion-host`                 |
-| 기존 공용 대상 그룹  | `internal-bastion-host`, HTTP 80, `/health` |
-| 앱·작업자 릴리스     | `team-planning-20261105`                    |
-| GitHub 조직·App·설치 | `soldoc-kr` · `5589960` · `178059528`       |
-| 기본 공간 소유자     | 서비스 아이디 `hyeokju98`                   |
+| 항목                 | 기존 값                                                  |
+| -------------------- | -------------------------------------------------------- |
+| 리전                 | `ap-northeast-2`                                         |
+| 기존 EC2             | `i-0ea0fe35a37c9d3cd`, `t3.micro`, `x86_64`              |
+| 새 EC2               | `i-0d478cc462d8b6f4e`, `t4g.small`, `arm64`              |
+| 새 EC2 보안 그룹     | `sg-087d85224c7996305`, ALB 보안 그룹에서 HTTP 80만 허용 |
+| 새 EC2 루트 디스크   | 암호화 `gp3` 32GiB                                       |
+| VPC                  | `vpc-032c508fba5c47150`                                  |
+| 기존 서브넷          | `subnet-0ae1f974e15ae353e`                               |
+| 기존 ALB             | `alb-internal-bastion-host`                              |
+| 기존 공용 대상 그룹  | `internal-bastion-host`, HTTP 80, `/health`              |
+| 앱·작업자 릴리스     | `team-planning-20261105`                                 |
+| GitHub 조직·App·설치 | `soldoc-kr` · `5589960` · `178059528`                    |
+| 기본 공간 소유자     | 서비스 아이디 `hyeokju98`                                |
 
 기존 DNS·ALB·HTTPS 인증서·GitHub App 등록과 설치를 유지한다. `DOMAIN`, `TOKEN_ENCRYPTION_KEY`, App 개인 키·OAuth Secret·웹훅 secret도 그대로 가져온다. 동일 도메인이므로 Callback·Webhook·Claude MCP 주소는 변경하지 않는다. 최초 소유자 가입도 다시 하지 않는다.
 
@@ -34,7 +37,7 @@ flowchart LR
 
 ## 1. 새 EC2 준비
 
-1. 기존 ALB와 연결 가능한 같은 VPC에서 생성한다. ALB가 활성화한 가용 영역과 서브넷·라우팅을 확인한다. 기존 이미지를 그대로 쓸 경우 CPU는 **x86_64**를 선택한다.
+1. 기존 ALB와 연결 가능한 같은 VPC에서 생성한다. ALB가 활성화한 가용 영역과 서브넷·라우팅을 확인한다. 이번 목적지는 **t4g.small / ARM64**이며 기존 x86_64 이미지는 사용할 수 없으므로 ARM64로 다시 빌드한다.
 2. Docker Engine·Compose v2 이상·nginx와 SSM 접속을 준비한다. 앱 빌드는 기존처럼 개발·CI에서 수행해 전달할 수 있다. 현재 메모리가 약 1GiB이므로 새 용량은 앱·작업자·DB의 실제 사용량과 증가 여유를 고려한다.
 3. 새 보안 그룹은 **ALB 보안 그룹에서 오는 80번**과 필요한 관리 경로만 허용한다. 앱의 3000번·DB의 5432번은 인터넷에 공개하지 않는다. 외부 DB를 쓴다면 새 EC2에서 DB로의 접근과 TLS를 별도로 허용한다.
 4. `/opt/cloud-pm-agent`를 만들고 Compose·nginx 설정·검증한 웹/작업자 이미지를 준비한다. nginx의 OS별 기본 서버 설정과 `default_server`가 중복되지 않게 구성하고 `nginx -t`로 확인한다.
@@ -43,14 +46,18 @@ flowchart LR
 
 ## 2. 이미지·설정을 안전하게 전달
 
-검증한 이미지가 있는 개발·CI 환경에서 실행한다. 이후 앱 코드가 업데이트됐다면 실제 운영 릴리스에 맞춘다.
+개발·CI 환경에서 운영과 같은 소스 버전으로 ARM64 이미지를 빌드한다. 이후 앱 코드가 업데이트됐다면 실제 운영 릴리스에 맞춘다. 빌드를 새 EC2에서 수행할 필요는 없다.
 
 ```sh
-docker save -o cloud-pm-images.tar cloud-pm-agent:web-team-planning-20261105 cloud-pm-agent:worker-team-planning-20261105
+docker build --platform linux/arm64 --target web -t cloud-pm-agent:web-team-planning-20261105-arm64 .
+docker build --platform linux/arm64 --target worker -t cloud-pm-agent:worker-team-planning-20261105-arm64 .
+docker save -o cloud-pm-images.tar cloud-pm-agent:web-team-planning-20261105-arm64 cloud-pm-agent:worker-team-planning-20261105-arm64
 sha256sum cloud-pm-images.tar > cloud-pm-images.tar.sha256
 ```
 
 macOS에서 해시를 만들 때는 `shasum -a 256`을 사용한다. 이미지·해시·기존 `.env.production`·`compose.ec2.yaml`을 보호된 전송 경로로 새 서버에 가져온다. 비밀 설정을 SSM 명령 본문이나 채팅에 붙이지 않는다.
+
+**새 서버의 환경 파일만** `RELEASE=team-planning-20261105-arm64`로 맞춘다. 기존 서버의 릴리스와 다른 비밀값은 유지한다. PostgreSQL의 논리 백업(`pg_dump`/`pg_restore`)으로 기존 x86_64 DB를 ARM64에 복원하며 데이터 디렉터리를 직접 복사하지 않는다.
 
 새 EC2에서 실행한다.
 
