@@ -4,6 +4,8 @@
 
 현재 서비스의 도메인을 유지하고 새 EC2로 옮긴다면 [기존 ALB를 유지하는 EC2 이전 절차](ec2-migration.md)를 우선 따른다. 공용 대상 그룹을 보존하고 Cloud PM 경로만 새 서버로 전환한다.
 
+현재 운영은 이전 완료 후 사용자의 추가 요청으로 계정·워크스페이스·업무 데이터를 초기화했다. 현재 환경을 처음 사용할 때는 **4절의 최초 소유자 가입**부터 진행한다. 과거 계정과 개인 MCP 토큰은 사용할 수 없다.
+
 ## 1. 운영 방식을 선택한다
 
 | 목적                                | 현재 지원하는 방식                                             |
@@ -131,7 +133,7 @@ PRD의 담당자 필드는 대표 담당자 한 명이다. 실행 담당자는 *
 
 ## 5. 현재 운영에서 보존할 항목
 
-2026-11-05 확인 기준으로 운영 도메인은 `cloud-pm.soldoc.co.kr`, 조직은 `soldoc-kr`, App ID는 `5589960`, 설치 ID는 `178059528`이다. 기본 공간 `main`의 소유자 서비스 아이디는 **`hyeokju98`**다. 기존 계정에 GitHub를 연결하면 소유자 권한을 유지한다. GitHub OAuth 가입 자체가 기존 공간의 소유자 권한을 부여하지는 않는다.
+2026-11-05 확인 기준으로 운영 도메인은 `cloud-pm.soldoc.co.kr`, 조직은 `soldoc-kr`, App ID는 `5589960`, 설치 ID는 `178059528`이다. 초기화 전 기본 공간 `main`의 소유자 서비스 아이디는 **`hyeokju98`**였다. 이후 계정·워크스페이스를 초기화했으므로 현재는 소유자가 없으며 첫 가입자가 새 소유자가 된다. 일반적으로 기존 계정에 GitHub를 연결하면 권한을 유지하지만, 초기화로 삭제한 과거 계정·MCP 토큰은 복구되지 않는다.
 
 | 보존 항목                     | 보존 이유                                                                       |
 | ----------------------------- | ------------------------------------------------------------------------------- |
@@ -214,7 +216,7 @@ docker run --rm --env-file deploy/.env.restore -v "$PWD/migration-backup:/backup
 docker run --rm --env-file deploy/.env.restore postgres:18-alpine psql -X -v ON_ERROR_STOP=1 -c "SELECT w.id AS workspace,u.login AS owner,m.role FROM workspace_settings w JOIN app_users u ON u.id=w.owner_id JOIN workspace_members m ON m.workspace_id=w.id AND m.user_id=u.id;"
 ```
 
-현재 운영의 `main / hyeokju98 / owner`가 보여야 한다. 새 소유자를 다시 가입시키거나 기존 계정을 지울 필요가 없다. 인증서 마운트를 사용했다면 이 조회 명령에도 동일하게 적용한다.
+`main / hyeokju98 / owner`는 초기화 전 백업의 예시다. 실제 이전 원본의 소유자와 일치하는지 확인한다. 기존 DB를 복원하는 이전에서는 소유자를 다시 가입시키거나 기존 계정을 지울 필요가 없다. 새로 초기화한 DB에는 이 값이 없다. 인증서 마운트를 사용했다면 이 조회 명령에도 동일하게 적용한다.
 
 ### 6-4. 새 웹을 검증하고 주소를 전환한다
 
