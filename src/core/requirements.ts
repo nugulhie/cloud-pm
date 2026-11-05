@@ -452,7 +452,22 @@ export class Requirements {
       throw new DomainError("먼저 PRD를 태스크로 전환하세요.");
     if (task.data.repository && task.data.repository.toLowerCase() !== repo)
       throw new DomainError("태스크에 지정된 저장소를 선택하세요.");
-    const assignee = requestedAssignee ?? task.data.assignee;
+    const account = task.data.assigneeUserId
+      ? (
+          await this.store.query<{
+            github_id: string | null;
+            github_login: string | null;
+          }>(
+            "SELECT u.github_id,u.github_login FROM app_users u JOIN workspace_members m ON m.user_id=u.id WHERE u.id=$1 AND m.workspace_id=$2",
+            [task.data.assigneeUserId, this.store.workspaceId],
+          )
+        )[0]
+      : null;
+    const assignee =
+      requestedAssignee ??
+      (account?.github_id
+        ? (account.github_login ?? task.data.assignee)
+        : task.data.assignee);
     if (assignee && !/^[A-Za-z0-9_-]{1,100}$/.test(assignee))
       throw new DomainError(
         "이슈 담당자를 GitHub 사용자 목록에서 다시 선택하세요.",

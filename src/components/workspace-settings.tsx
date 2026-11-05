@@ -244,11 +244,40 @@ export default function WorkspaceSettings({
                 </label>
               ) : (
                 <p className="section-description">
-                  이 워크스페이스는 초대받은 멤버만 참여할 수 있습니다.
+                  서비스 계정의 참여는 초대 링크로 관리합니다.
                 </p>
               )}
+              <label className="workspace-policy">
+                <input
+                  type="checkbox"
+                  checked={data.githubOrgJoin ?? false}
+                  disabled={busy}
+                  onChange={async (e) => {
+                    const githubOrgJoin = e.target.checked,
+                      previous = data;
+                    setData({ ...data, githubOrgJoin });
+                    setBusy(true);
+                    setError("");
+                    try {
+                      setData(await call("workspace", { githubOrgJoin }));
+                    } catch (e) {
+                      setData(previous);
+                      setError((e as Error).message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                />
+                GitHub 조직 구성원의 참여 허용
+              </label>
+              <p className="section-description">
+                허용하면 GitHub로 조직을 확인한 사용자가 이 워크스페이스에
+                멤버로 참여하고 조직 공용 연결을 사용할 수 있습니다. 기본
+                워크스페이스 외 공간은 처음에는 비공개입니다.
+              </p>
               <form
                 className="account-form"
+                aria-label="워크스페이스 초대"
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const f = new FormData(e.currentTarget);

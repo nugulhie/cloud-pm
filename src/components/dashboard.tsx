@@ -30,7 +30,14 @@ import HistoryTimeline from "./history-timeline";
 import AccountPanel from "./account-panel";
 import MarkdownBody from "./markdown-body";
 import ProjectForm from "./project-form";
-import GitHubAssigneeSelect from "./github-assignee-select";
+import TaskAssigneeSelect from "./task-assignee-select";
+import TaskSprintSelect from "./task-sprint-select";
+import ResourcePlanPanel from "./resource-plan-panel";
+import BacklogSprintPanel from "./backlog-sprint-panel";
+import AssigneeMappingPanel from "./assignee-mapping-panel";
+import SavedViewsBar from "./saved-views-bar";
+import IssueAssigneeEditor from "./issue-assignee-editor";
+import type { TaskFilters } from "../core/planning-model";
 import FileDiff from "./file-diff";
 import AsanaFileImport from "./asana-file-import";
 import DeleteConfirmation from "./delete-confirmation";
@@ -70,12 +77,41 @@ const tabs = [
   "PRD 관리",
   "정책 저장소",
   "용어집",
+  "리소스 계획",
+  "백로그·스프린트",
+  "담당자 매칭",
 ];
 export default function Dashboard() {
   const [managementKind, setManagementKind] = useState<
     "project" | "feature" | "task"
   >("project");
   const [notice, setNotice] = useState("");
+  const [planningFilters, setPlanningFilters] = useState<TaskFilters>({});
+  useEffect(() => {
+    const url = new URL(window.location.href),
+      state = url.searchParams.get("github_oauth");
+    if (!state) return;
+    const messages: Record<string, string> = {
+      connected: "GitHub 계정을 확인하고 연결했습니다.",
+      conflict:
+        "이미 다른 계정에 연결된 GitHub 계정이거나 인증 요청이 만료되었습니다. 기존 서비스 계정에서 다시 연결하세요.",
+      membership: "GitHub 조직 멤버십과 App의 Members 읽기 권한을 확인하세요.",
+      failed: "GitHub 인증을 완료하지 못했습니다. 다시 시작하세요.",
+    };
+    if (messages[state]) {
+      setNotice(messages[state]!);
+      if (state !== "connected") setProfileOpen(true);
+    }
+    url.searchParams.delete("github_oauth");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  }, []);
+  const applyTaskFilters = (filters: TaskFilters) => {
+    setPlanningFilters(filters);
+    setProject(filters.project ?? "");
+    setAuthor(filters.assignee ?? "");
+    setStatus(filters.statuses?.length === 1 ? filters.statuses[0]! : "");
+    setSearch(filters.query ?? "");
+  };
   const [deleting, setDeleting] = useState<{
     kind: "project" | "task";
     id: string;
@@ -285,6 +321,7 @@ export default function Dashboard() {
     setAttentionLimit(5);
   }, [project, author, status, search]);
   function resetFilters() {
+    setPlanningFilters({});
     setAuthor("");
     setStatus("");
     setSearch("");
@@ -418,11 +455,56 @@ export default function Dashboard() {
       name: row.data.name,
     });
   }
+  const taskAccountId = (task: Task) =>
+    data?.assigneeMatches
+      ? (data.assigneeMatches[task.id] ?? null)
+      : (task.assigneeUserId ?? null);
+  const dependencyIndex = new Map(
+    (data?.tasks ?? []).map((t) => [t.data.id, t.data]),
+  );
+  const changeStatusFilter = (value: string) => {
+    setStatus(value);
+    setPlanningFilters((old) => ({ ...old, statuses: undefined }));
+  };
+  const changeAuthorFilter = (value: string) => {
+    setAuthor(value);
+    setPlanningFilters((old) => ({ ...old, assigneeUserId: undefined }));
+  };
   const tasks = (data?.tasks ?? []).filter(
     (t) =>
       (!project || t.data.project === project) &&
       (!author || t.data.assignee === author) &&
       (!status || t.data.status === status) &&
+      (!planningFilters.statuses?.length ||
+        !!status ||
+        planningFilters.statuses.includes(t.data.status)) &&
+      (!planningFilters.assigneeUserId ||
+        (planningFilters.assigneeUserId === "me"
+          ? !!data?.viewer.userId &&
+            taskAccountId(t.data) === data.viewer.userId
+          : planningFilters.assigneeUserId === "unassigned"
+            ? !taskAccountId(t.data)
+            : taskAccountId(t.data) === planningFilters.assigneeUserId)) &&
+      (!planningFilters.priorities?.length ||
+        planningFilters.priorities.includes(t.data.priority)) &&
+      (!planningFilters.types?.length ||
+        planningFilters.types.includes(t.data.type ?? "feature")) &&
+      (!planningFilters.blockedOnly ||
+        (!["done", "canceled"].includes(t.data.status) &&
+          !!t.data.dependsOn?.some((id) => {
+            const dep = dependencyIndex.get(id);
+            return dep?.project !== t.data.project || dep.status !== "done";
+          }))) &&
+      (!planningFilters.sprintId ||
+        (planningFilters.sprintId === "backlog"
+          ? (!t.data.sprintId ||
+              data?.sprintStates?.[t.data.sprintId] === "closed") &&
+            !["done", "canceled"].includes(t.data.status)
+          : t.data.sprintId === planningFilters.sprintId)) &&
+      (!planningFilters.dueBefore ||
+        (!!t.data.dueDate && t.data.dueDate <= planningFilters.dueBefore)) &&
+      (!planningFilters.dueAfter ||
+        (!!t.data.dueDate && t.data.dueDate >= planningFilters.dueAfter)) &&
       (!search ||
         `${t.data.title} ${t.data.id}`
           .toLowerCase()
@@ -474,6 +556,15 @@ export default function Dashboard() {
             description: val("description"),
             repository: val("repository") || null,
             assignee: val("assignee"),
+            ...(val("assigneeAccountMode") === "account"
+              ? { assigneeUserId: val("assigneeUserId") || null }
+              : {}),
+            startDate: val("startDate") || null,
+            estimatedHours: val("estimatedHours")
+              ? Number(val("estimatedHours"))
+              : null,
+            storyPoints: val("storyPoints") ? Number(val("storyPoints")) : null,
+            sprintId: val("sprintId") || null,
             status: val("status"),
             priority: val("priority"),
             dueDate: val("dueDate") || null,
@@ -829,6 +920,7 @@ export default function Dashboard() {
             setAuthor("");
             setStatus("");
             setSearch("");
+            setPlanningFilters({});
             setRepo("");
             setCheckedItems([]);
             setHistory([]);
@@ -846,10 +938,10 @@ export default function Dashboard() {
         />
         <nav aria-label="워크스페이스 메뉴">
           {[
-            { title: "업무", indices: [0, 1, 6] },
+            { title: "업무", indices: [0, 1, 11, 6, 10] },
             { title: "문서", indices: [7, 8, 9] },
             { title: "활동", indices: [2, 3] },
-            { title: "관리", indices: [5, 4] },
+            { title: "관리", indices: [12, 5, 4] },
           ].map((group) => (
             <div className="navigation-group" key={group.title}>
               <div className="nav-label">{group.title}</div>
@@ -1163,9 +1255,14 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              {![tabs[1], tabs[3], tabs[4], "정책 저장소", "용어집"].includes(
-                tab,
-              ) && (
+              {![
+                tabs[1],
+                tabs[3],
+                tabs[4],
+                tabs[12],
+                "정책 저장소",
+                "용어집",
+              ].includes(tab) && (
                 <div className="filters">
                   <select
                     aria-label="프로젝트 필터"
@@ -1288,6 +1385,40 @@ export default function Dashboard() {
                     setManagementKind("project");
                     setTab(tabs[5]);
                   }}
+                />
+              )}
+              {tab === tabs[10] && (
+                <ResourcePlanPanel
+                  key={data.viewer.workspaceId + project}
+                  api={api}
+                  project={project}
+                  canWrite={canWrite}
+                  viewerId={data.viewer.userId}
+                  admin={["owner", "admin"].includes(
+                    data.viewer.workspaceRole ?? "",
+                  )}
+                  tasks={data.tasks}
+                  onOpenTask={openTask}
+                  onRefresh={load}
+                />
+              )}
+              {tab === tabs[11] && (
+                <BacklogSprintPanel
+                  key={data.viewer.workspaceId + project}
+                  api={api}
+                  project={project}
+                  canWrite={canWrite}
+                  tasks={data.tasks}
+                  onOpenTask={openTask}
+                  onRefresh={load}
+                />
+              )}
+              {tab === tabs[12] && (
+                <AssigneeMappingPanel
+                  key={data.viewer.workspaceId}
+                  api={api}
+                  canWrite={canWrite}
+                  onRefresh={load}
                 />
               )}
               {["정책 저장소", "용어집"].includes(tab ?? "") && (
@@ -1551,7 +1682,44 @@ export default function Dashboard() {
               )}
               {tab === tabs[1] && (
                 <>
+                  <SavedViewsBar
+                    key={data.viewer.workspaceId}
+                    api={api}
+                    filters={{
+                      ...planningFilters,
+                      project: project || undefined,
+                      assignee: author || undefined,
+                      statuses: status
+                        ? [status as Task["status"]]
+                        : planningFilters.statuses,
+                      query: search || undefined,
+                    }}
+                    onApply={applyTaskFilters}
+                    viewerId={data.viewer.userId}
+                    canWrite={canWrite}
+                    admin={["owner", "admin"].includes(
+                      data.viewer.workspaceRole ?? "",
+                    )}
+                  />
                   <TaskBoard
+                    filters={{
+                      type:
+                        planningFilters.types?.length === 1
+                          ? planningFilters.types[0]!
+                          : "",
+                      blockedOnly: planningFilters.blockedOnly ?? false,
+                      view: planningFilters.view ?? "hierarchy",
+                    }}
+                    onFiltersChange={(filters) =>
+                      setPlanningFilters((old) => ({
+                        ...old,
+                        types: filters.type
+                          ? [filters.type as NonNullable<Task["type"]>]
+                          : undefined,
+                        blockedOnly: filters.blockedOnly,
+                        view: filters.view,
+                      }))
+                    }
                     githubConnections={taskConnections}
                     key={data.viewer.workspaceId}
                     tasks={tasks}
@@ -1596,7 +1764,9 @@ export default function Dashboard() {
                           <select
                             aria-label="작업자 필터"
                             value={author}
-                            onChange={(event) => setAuthor(event.target.value)}
+                            onChange={(event) =>
+                              changeAuthorFilter(event.target.value)
+                            }
                           >
                             <option value="">모든 담당자</option>
                             {[
@@ -1621,7 +1791,9 @@ export default function Dashboard() {
                           <select
                             aria-label="상태 필터"
                             value={status}
-                            onChange={(event) => setStatus(event.target.value)}
+                            onChange={(event) =>
+                              changeStatusFilter(event.target.value)
+                            }
                           >
                             <option value="">모든 상태</option>
                             {Object.entries(labels)
@@ -2253,14 +2425,60 @@ export default function Dashboard() {
                               ))}
                           </select>
                         </label>
-                        <GitHubAssigneeSelect
+                        <TaskAssigneeSelect
                           key={`assignee-${editing?.data.id ?? newTaskId}-${formProject}`}
                           api={api}
                           project={formProject}
-                          defaultValue={
+                          defaultUserId={
+                            editing?.data.project === formProject
+                              ? editing.data.assigneeUserId
+                              : null
+                          }
+                          defaultAssignee={
                             editing?.data.project === formProject
                               ? editing.data.assignee
                               : ""
+                          }
+                        />
+                        <label>
+                          시작일
+                          <input
+                            name="startDate"
+                            type="date"
+                            defaultValue={editing?.data.startDate ?? ""}
+                          />
+                        </label>
+                        <label>
+                          예상 공수 (시간)
+                          <input
+                            name="estimatedHours"
+                            type="number"
+                            min="0"
+                            max="10000"
+                            step="0.25"
+                            defaultValue={editing?.data.estimatedHours ?? ""}
+                            placeholder="예: 8"
+                          />
+                        </label>
+                        <label>
+                          스토리 포인트
+                          <input
+                            name="storyPoints"
+                            type="number"
+                            min="0"
+                            max="1000"
+                            step="0.5"
+                            defaultValue={editing?.data.storyPoints ?? ""}
+                          />
+                        </label>
+                        <TaskSprintSelect
+                          key={`sprint-${editing?.data.id ?? newTaskId}-${formProject}`}
+                          api={api}
+                          project={formProject}
+                          value={
+                            editing?.data.project === formProject
+                              ? editing.data.sprintId
+                              : null
                           }
                         />
                         <label>
@@ -2500,6 +2718,21 @@ export default function Dashboard() {
               {new Date(selected.updatedAt).toLocaleString("ko-KR")}
             </p>
             <GitHubPeople item={selected} />
+            <IssueAssigneeEditor
+              key={selected.id}
+              item={selected}
+              projects={data?.projects ?? []}
+              tasks={data?.tasks ?? []}
+              links={data?.links ?? []}
+              api={api}
+              canWrite={canWrite}
+              onChanged={async (item) => {
+                setSelected((current) =>
+                  current?.id === item.id ? item : current,
+                );
+                await load();
+              }}
+            />
             <p>
               커밋 작성자:{" "}
               {selected.commitAuthors?.join(", ") || "확인 정보 없음"}

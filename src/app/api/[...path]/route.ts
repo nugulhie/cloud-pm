@@ -23,6 +23,14 @@ async function handle(request: Request, { path }: { path: string[] }) {
     const service = await serviceFor(request);
     const route = path.join("/");
     if (request.method === "GET") {
+      if (route.startsWith("planning/"))
+        return NextResponse.json(
+          await service.readPlanning(
+            route.slice(9),
+            Object.fromEntries(new URL(request.url).searchParams),
+          ),
+          { headers: { "Cache-Control": "no-store" } },
+        );
       if (route === "knowledge/impact")
         return NextResponse.json(
           await service.getKnowledgeImpact(
@@ -82,6 +90,17 @@ async function handle(request: Request, { path }: { path: string[] }) {
       )
         throw new DomainError("요청이 너무 큽니다.", 413);
       const body = text ? JSON.parse(text) : {};
+      if (route === "github/issue-assignees")
+        return NextResponse.json(await service.updateIssueAssignees(body));
+      if (route === "planning/tasks/query")
+        return NextResponse.json(
+          await service.readPlanning("tasks/query", body),
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      if (route.startsWith("planning/"))
+        return NextResponse.json(
+          await service.writePlanning(route.slice(9), body),
+        );
       if (route === "projects/import/asana/preview")
         return NextResponse.json(await service.previewAsanaProject(body));
       if (route === "projects/import/asana")

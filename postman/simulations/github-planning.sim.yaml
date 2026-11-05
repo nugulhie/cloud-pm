@@ -1,0 +1,9 @@
+simulation: github-planning
+routing: path
+mocks:
+  - name: github-planning
+    routeKey: github
+    origin:
+      - github.com
+      - api.github.com
+    path: postman/mocks/github-planning

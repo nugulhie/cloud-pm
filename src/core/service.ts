@@ -10,6 +10,8 @@ import {
 } from "./requirements";
 import { Collaboration, type TaskComment } from "./collaboration";
 import { Workspaces } from "../workspaces/service";
+import { Planning } from "./planning";
+import { changeIssueAssignees } from "./issue-assignees";
 import { knowledgeInput, type KnowledgeEntry } from "./knowledge-model";
 import { knowledgeImpact, knowledgeImpactQuery } from "./knowledge-impact";
 import { validatePolicyDependencies } from "./policy-dependencies";
@@ -63,6 +65,7 @@ type TaskWriteContext = {
   authorizedProjects: Set<string>;
 };
 export class Service {
+  private planningService?: Planning;
   constructor(
     public store: Store,
     public actor: Actor,
@@ -83,6 +86,82 @@ export class Service {
       );
       await ensureProjectPrefixes(store);
       return work(new Service(store, this.actor, this.github));
+    });
+  }
+  private planning() {
+    return (this.planningService ??= new Planning(
+      this.store,
+      this.actor,
+      (task, revision) => this.saveTaskUnlocked(task, revision),
+    ));
+  }
+  async updateIssueAssignees(input: unknown) {
+    requireWrite(this.actor);
+    if (
+      !this.github &&
+      !this.actor.githubToken &&
+      !this.actor.githubTokenProvider
+    )
+      throw new DomainError("GitHub 쓰기 연결이 필요합니다.", 403);
+    return changeIssueAssignees(
+      this.store,
+      this.actor,
+      this.github ?? serverGitHubClient(this.actor),
+      input,
+      (task, revision) => this.saveTask(task, revision),
+    );
+  }
+  async readPlanning(operation: string, input: unknown = {}) {
+    const plan = new Planning(this.store, this.actor);
+    switch (operation) {
+      case "people":
+        return plan.people(input);
+      case "assignments":
+        return plan.assignmentList();
+      case "views":
+        return plan.views();
+      case "sprints":
+        return plan.sprintList(input);
+      case "backlog":
+        return plan.backlog(input);
+      case "resources":
+        return plan.resources(input);
+      case "tasks/query":
+        return plan.queryTasks(input);
+      default:
+        throw new DomainError("지원하지 않는 계획 조회입니다.", 404);
+    }
+  }
+  async writePlanning(operation: string, input: unknown) {
+    requireWrite(this.actor);
+    return this.withTaskGraph(async (service) => {
+      const plan = service.planning();
+      switch (operation) {
+        case "assignments":
+          return plan.saveAssignment(input);
+        case "assignments/delete":
+          return plan.deleteAssignment(input);
+        case "capacity":
+          return plan.saveCapacity(input);
+        case "views":
+          return plan.saveView(input);
+        case "views/delete":
+          return plan.deleteView(input);
+        case "sprints":
+          return plan.saveSprint(input);
+        case "sprints/start":
+          return plan.startSprint(input);
+        case "sprints/close":
+          return plan.closeSprint(input);
+        case "sprints/delete":
+          return plan.deleteSprint(input);
+        case "sprints/assign":
+          return plan.assignSprint(input);
+        case "backlog/reorder":
+          return plan.reorder(input);
+        default:
+          throw new DomainError("지원하지 않는 계획 수정입니다.", 404);
+      }
     });
   }
   async saveKnowledge(input: unknown, revision?: number) {
@@ -501,6 +580,12 @@ export class Service {
         workspaceRole: this.actor.workspaceRole ?? null,
         role: this.actor.role,
       },
+      assigneeMatches: await new Planning(this.store, this.actor).assignmentIds(
+        tasks.map((t) => t.data),
+      ),
+      sprintStates: await new Planning(this.store, this.actor).sprintStates(
+        new Set(projects.map((p) => p.data.id)),
+      ),
       mode: demoMode() ? "demo" : "live",
       syncInProgress: activeSync.length > 0,
       projects,
@@ -761,6 +846,7 @@ export class Service {
       throw new DomainError("프로젝트에 속한 기능을 선택하세요.");
     const existing = previous;
     if (existing) await assertProject(existing.data.project);
+    await this.planning().normalizeTask(t, existing?.data);
     if (t.repository === undefined)
       t.repository = existing?.data.repository ?? null;
     if (t.repository) {
@@ -895,6 +981,8 @@ export class Service {
             ? featureSchema
             : taskSchema;
       const value = schema.parse({ ...row.data, ...data.patch });
+      if (data.kind === "task" && "assignee" in data.patch)
+        delete (value as Task).assigneeUserId;
       if (
         "endDate" in value &&
         value.startDate &&
@@ -981,6 +1069,12 @@ export class Service {
             ? requirementInput
             : knowledgeInput;
     const merged = { ...inputFields(schema, old.data), ...value.patch };
+    if (
+      value.kind === "task" &&
+      "assignee" in value.patch &&
+      !("assigneeUserId" in value.patch)
+    )
+      delete merged.assigneeUserId;
     if (value.kind === "project")
       return this.saveProject(merged, value.revision);
     if (value.kind === "task") return this.saveTask(merged, value.revision);
@@ -1105,6 +1199,29 @@ export class Service {
         .filter((l) => taskIds.includes(l.data.task))
         .map((l) => ({ kind: "link", id: l.data.id, revision: l.revision })),
     ];
+    if (kind === "project")
+      for (const childKind of ["sprint", "backlog-order", "saved-view"]) {
+        const children = await this.store.list<{
+          id: string;
+          project?: string;
+          filters?: { project?: string };
+        }>(childKind);
+        for (const child of children)
+          if (
+            ids.includes(
+              childKind === "backlog-order"
+                ? child.data.id
+                : childKind === "saved-view"
+                  ? (child.data.filters?.project ?? "")
+                  : (child.data.project ?? ""),
+            )
+          )
+            targets.push({
+              kind: childKind,
+              id: child.data.id,
+              revision: child.revision,
+            });
+      }
     await this.store.removeMany(targets, this.actor.name);
     return { removed: entries.length };
   }

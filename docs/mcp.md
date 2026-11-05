@@ -112,6 +112,23 @@ Claude Chat이 대화에서 기획하고 MCP 도구를 호출하는 흐름에는
 
 프로필의 **Claude MCP 연결**에서 현재 공간의 주소·권한·최근 토큰 요청을 확인하고 토큰으로 인증·도구 목록을 점검할 수 있습니다. 실제 Claude 연결 여부는 별도 확인합니다. 배포 파일과 CLI 명령은 [운영 배포 안내](deployment.md)를 참고하세요.
 
+## 계정 담당자와 계획 기능
+
+`list_workspace_people`, `list_assignee_mappings`, `save_assignee_mapping`,
+`delete_assignee_mapping`으로 담당자와 매칭표를 관리합니다.
+`set_member_capacity`, `get_resource_plan`은 근무 요일·휴무와 예정 공수를 다룹니다.
+`list_saved_views`, `save_saved_view`, `delete_saved_view`, `query_tasks`는 개인·공유
+필터와 ‘내 작업’을 지원합니다. 스프린트는 `list_sprints`, `save_sprint`,
+`start_sprint`, `close_sprint`, `delete_sprint`, `assign_sprint_tasks`로 관리하고,
+`get_backlog`, `reorder_backlog`로 백로그 순서를 관리합니다.
+
+`update_github_issue_assignees`는 GitHub 원본을 수정하므로 사용자가 변경을 명시적으로
+요청한 경우에만 실행합니다. 원본 확인 시각과 선택적인 내부 태스크 revision을 사용하고,
+부분 성공이나 응답 유실을 숨기거나 자동 재시도하지 않습니다.
+GitHub OAuth 가입·계정 연결은 브라우저에서 수행하며, MCP는 기존 개인 서비스 토큰으로
+인증합니다. 조회 역할에는 계획 수정 도구를 노출하지 않습니다.
+[입력 계약과 화면 안내](team-planning.md)를 참고하세요.
+
 ## 업무 조회와 필드별 수정 (2026-10-29)
 
 PRD의 여러 태스크 생성은 `convert_requirements_to_tasks`의 `tasks` 배열로 지원한다.

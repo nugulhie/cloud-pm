@@ -9,7 +9,7 @@ export class Workspaces {
   ) {}
   async joinDefault() {
     await this.store.query(
-      "INSERT INTO workspace_settings(id,owner_id) SELECT 'main',id FROM app_users ORDER BY created_at,id LIMIT 1 ON CONFLICT DO NOTHING",
+      "INSERT INTO workspace_settings(id,owner_id,github_org_join) SELECT 'main',id,true FROM app_users ORDER BY created_at,id LIMIT 1 ON CONFLICT DO NOTHING",
     );
     await this.store.query(
       "INSERT INTO workspace_members(workspace_id,user_id,role) SELECT id,$1,CASE WHEN owner_id=$1 THEN 'owner' ELSE 'member' END FROM workspace_settings WHERE id='main' ON CONFLICT DO NOTHING",
@@ -36,6 +36,7 @@ export class Workspaces {
         description: string;
         owner_id: string;
         invite_only: boolean;
+        github_org_join: boolean;
         role: string;
       }>(
         "SELECT w.*,m.role FROM workspace_settings w JOIN workspace_members m ON m.workspace_id=w.id WHERE w.id=$1 AND m.user_id=$2",

@@ -31,6 +31,8 @@ export default function TaskBoard({
   externalFilterCount = 0,
   searchActive = false,
   onResetFilters,
+  filters: controlledFilters,
+  onFiltersChange,
 }: {
   tasks: Stored<Task>[];
   relatedTasks?: Stored<Task>[];
@@ -48,6 +50,16 @@ export default function TaskBoard({
   externalFilterCount?: number;
   searchActive?: boolean;
   onResetFilters?: () => void;
+  filters?: {
+    type: string;
+    blockedOnly: boolean;
+    view: "board" | "list" | "hierarchy";
+  };
+  onFiltersChange?: (filters: {
+    type: string;
+    blockedOnly: boolean;
+    view: "board" | "list" | "hierarchy";
+  }) => void;
 }) {
   const contextTasks = relatedTasks ?? allTasks;
   const context = useMemo(
@@ -63,14 +75,31 @@ export default function TaskBoard({
     [projects],
   );
   const [showCanceled, setShowCanceled] = useState(false);
-  const [blockedOnly, setBlockedOnly] = useState(false);
-  const [typeFilter, setTypeFilter] = useState("");
+  const [localBlockedOnly, setLocalBlockedOnly] = useState(false);
+  const [localTypeFilter, setLocalTypeFilter] = useState("");
+  const blockedOnly = controlledFilters?.blockedOnly ?? localBlockedOnly;
+  const typeFilter = controlledFilters?.type ?? localTypeFilter;
+  const setBlockedOnly = (value: boolean) =>
+    controlledFilters
+      ? onFiltersChange?.({ ...controlledFilters, blockedOnly: value })
+      : setLocalBlockedOnly(value);
+  const setTypeFilter = (value: string) =>
+    controlledFilters
+      ? onFiltersChange?.({ ...controlledFilters, type: value })
+      : setLocalTypeFilter(value);
   const tasks = allTasks.filter(
     (task) =>
       (!typeFilter || (task.data.type ?? "feature") === typeFilter) &&
       (!blockedOnly || isDependencyBlocked(task.data, dependencyTasks)),
   );
-  const [view, setView] = useState<"board" | "list" | "hierarchy">("hierarchy");
+  const [localView, setLocalView] = useState<"board" | "list" | "hierarchy">(
+    "hierarchy",
+  );
+  const view = controlledFilters?.view ?? localView;
+  const setView = (value: "board" | "list" | "hierarchy") =>
+    controlledFilters
+      ? onFiltersChange?.({ ...controlledFilters, view: value })
+      : setLocalView(value);
   const [visibleLimit, setVisibleLimit] = useState(50);
   useEffect(() => setVisibleLimit(50), [view, blockedOnly, typeFilter]);
   const [dragging, setDragging] = useState<Stored<Task> | null>(null),

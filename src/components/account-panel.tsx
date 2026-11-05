@@ -3,6 +3,7 @@ import SettingsLayout from "./settings-layout";
 import McpConnectionPanel from "./mcp-connection-panel";
 import WorkspaceSwitcher from "./workspace-switcher";
 import WorkspaceSettings from "./workspace-settings";
+import GitHubOAuthButton from "./github-oauth-button";
 import { useEffect, useState, type FormEvent } from "react";
 import type { Users } from "../users/service";
 type Profile = Awaited<ReturnType<Users["profile"]>>;
@@ -172,6 +173,7 @@ export default function AccountPanel({
         )}
         {!profile ? (
           <>
+            <GitHubOAuthButton />
             <div className="body-tabs">
               <button
                 type="button"
@@ -287,6 +289,11 @@ export default function AccountPanel({
                   description: "이름과 계정 정보를 관리합니다.",
                   content: (
                     <>
+                      <GitHubOAuthButton
+                        link
+                        connected={profile.githubOAuthConnected}
+                        login={profile.githubLogin}
+                      />
                       <form onSubmit={update} className="account-form">
                         <label>
                           표시 이름
@@ -338,6 +345,31 @@ export default function AccountPanel({
                       <p className="section-description">
                         조직 공용 GitHub 연결은 워크스페이스 탭에서 관리합니다.
                       </p>
+                      {profile.githubConnected && (
+                        <>
+                          <button
+                            className="button secondary"
+                            disabled={busy}
+                            onClick={() =>
+                              void act(async () => {
+                                const result = await call(
+                                  "github/disconnect-token",
+                                  {},
+                                );
+                                setProfile(result.user);
+                                setNotice("개인 GitHub 토큰을 해제했습니다.");
+                                onChanged(workspaceId);
+                              })
+                            }
+                          >
+                            개인 GitHub 토큰 해제
+                          </button>
+                          <p className="section-description">
+                            조직 공용 연결이 있으면 해당 연결로 조회합니다.
+                            검증된 GitHub 계정 연결은 유지합니다.
+                          </p>
+                        </>
+                      )}
                     </>
                   ),
                 },
@@ -467,46 +499,56 @@ export default function AccountPanel({
                     <>
                       <section className="password-settings">
                         <h4>비밀번호 변경</h4>
-                        <form
-                          className="account-form"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            const f = new FormData(e.currentTarget);
-                            void act(async () => {
-                              await call("password", {
-                                currentPassword: f.get("currentPassword"),
-                                newPassword: f.get("newPassword"),
+                        {profile.authProvider === "github" ? (
+                          <p className="section-description">
+                            GitHub으로 로그인하는 계정입니다. 비밀번호와 2단계
+                            인증은 GitHub 계정에서 관리하세요.
+                          </p>
+                        ) : (
+                          <form
+                            className="account-form"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const f = new FormData(e.currentTarget);
+                              void act(async () => {
+                                await call("password", {
+                                  currentPassword: f.get("currentPassword"),
+                                  newPassword: f.get("newPassword"),
+                                });
+                                setNotice(
+                                  "비밀번호를 변경하고 다른 로그인 세션을 종료했습니다.",
+                                );
                               });
-                              setNotice(
-                                "비밀번호를 변경하고 다른 로그인 세션을 종료했습니다.",
-                              );
-                            });
-                          }}
-                        >
-                          <label>
-                            현재 비밀번호
-                            <input
-                              name="currentPassword"
-                              type="password"
-                              required
-                              autoComplete="current-password"
-                            />
-                          </label>
-                          <label>
-                            새 비밀번호
-                            <input
-                              name="newPassword"
-                              type="password"
-                              required
-                              minLength={10}
-                              maxLength={200}
-                              autoComplete="new-password"
-                            />
-                          </label>
-                          <button className="button secondary" disabled={busy}>
-                            비밀번호 변경
-                          </button>
-                        </form>
+                            }}
+                          >
+                            <label>
+                              현재 비밀번호
+                              <input
+                                name="currentPassword"
+                                type="password"
+                                required
+                                autoComplete="current-password"
+                              />
+                            </label>
+                            <label>
+                              새 비밀번호
+                              <input
+                                name="newPassword"
+                                type="password"
+                                required
+                                minLength={10}
+                                maxLength={200}
+                                autoComplete="new-password"
+                              />
+                            </label>
+                            <button
+                              className="button secondary"
+                              disabled={busy}
+                            >
+                              비밀번호 변경
+                            </button>
+                          </form>
+                        )}
                       </section>
                     </>
                   ),

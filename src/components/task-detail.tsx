@@ -61,6 +61,24 @@ export default function TaskDetail({
             <dd>{value.repository}</dd>
           </div>
         )}
+        {value.startDate && (
+          <div>
+            <dt>시작일</dt>
+            <dd>{value.startDate}</dd>
+          </div>
+        )}
+        {value.estimatedHours != null && (
+          <div>
+            <dt>예상 공수</dt>
+            <dd>{value.estimatedHours}시간</dd>
+          </div>
+        )}
+        {value.storyPoints != null && (
+          <div>
+            <dt>스토리 포인트</dt>
+            <dd>{value.storyPoints}</dd>
+          </div>
+        )}
         <div>
           <dt>우선순위</dt>
           <dd>

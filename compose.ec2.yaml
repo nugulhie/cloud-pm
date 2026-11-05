@@ -54,6 +54,8 @@ services:
     environment:
       <<: *environment
       NODE_OPTIONS: --max-old-space-size=256
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
     ports:
       - "127.0.0.1:3000:3000"
     mem_limit: 320m

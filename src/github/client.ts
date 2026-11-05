@@ -49,6 +49,42 @@ export class GitHubClient {
       fetch?: typeof fetch;
     } = {},
   ) {}
+  async updateIssueAssignees(
+    repository: string,
+    number: number,
+    assignees: string[],
+  ) {
+    repositorySchema.parse(repository);
+    z.number().int().positive().parse(number);
+    z.array(z.string().regex(/^[A-Za-z0-9_-]{1,100}$/))
+      .max(10)
+      .parse(assignees);
+    const rateKey = this.options.rateKey ?? tokenRateKey(this.options.token);
+    checkGitHubBudget(rateKey, this.options.reserve);
+    const token = this.options.tokenProvider
+      ? await this.options.tokenProvider()
+      : this.options.token;
+    const response = await (this.options.fetch ?? fetch)(
+      `https://api.github.com/repos/${repository}/issues/${number}`,
+      {
+        method: "PATCH",
+        redirect: "error",
+        cache: "no-store",
+        signal: AbortSignal.timeout(15000),
+        headers: {
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+          "X-GitHub-Api-Version": "2026-03-10",
+          "User-Agent": "cloud-pm-agent",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ assignees }),
+      },
+    );
+    await observeGitHubBudget(response, rateKey);
+    if (!response.ok) throw new GitHubError(response.status);
+    return response.json();
+  }
 
   async createIssue(
     repository: string,

@@ -46,6 +46,11 @@ export const taskSchema = z.strictObject({
     .nullable()
     .optional(),
   assignee: z.string().max(100).default(""),
+  assigneeUserId: z.string().uuid().nullable().optional(),
+  startDate: z.iso.date().nullable().optional(),
+  estimatedHours: z.number().min(0).max(10000).nullable().optional(),
+  storyPoints: z.number().min(0).max(1000).nullable().optional(),
+  sprintId: id.nullable().optional(),
   status: z
     .enum(["backlog", "ready", "in_progress", "in_review", "done", "canceled"])
     .default("backlog"),

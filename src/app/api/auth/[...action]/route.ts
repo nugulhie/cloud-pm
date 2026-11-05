@@ -3,6 +3,7 @@ import { getStore } from "../../../../db/store";
 import { Users } from "../../../../users/service";
 import { DomainError } from "../../../../core/model";
 import { assertOrigin } from "../../../../core/auth";
+import { GitHubOAuth, sessionCookie } from "../../../../users/github-oauth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const cookie = (value: string, request: Request, clear = false) =>
@@ -23,12 +24,61 @@ async function handle(request: Request, action: string) {
   try {
     assertOrigin(request);
     const users = new Users(getStore());
+    const oauth = new GitHubOAuth(getStore());
+    if (request.method === "GET" && action === "github/config")
+      return Response.json(oauth.publicConfig(), {
+        headers: { "Cache-Control": "no-store" },
+      });
+    if (request.method === "GET" && action === "github/start") {
+      const started = await oauth.start(request);
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: started.url,
+          "Set-Cookie": started.cookie,
+          "Cache-Control": "no-store",
+          "Referrer-Policy": "no-referrer",
+        },
+      });
+    }
+    if (request.method === "GET" && action === "github/callback") {
+      const target = new URL("/", process.env.APP_URL ?? request.url);
+      const headers = new Headers({
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+      });
+      try {
+        const result = await oauth.callback(request);
+        headers.append(
+          "Set-Cookie",
+          sessionCookie(result.session.token, request),
+        );
+        headers.append("Set-Cookie", result.cookie);
+        target.searchParams.set("github_oauth", "connected");
+      } catch (error) {
+        headers.append("Set-Cookie", oauth.clearCookie());
+        target.searchParams.set(
+          "github_oauth",
+          error instanceof DomainError && error.status === 409
+            ? "conflict"
+            : error instanceof DomainError && error.status === 403
+              ? "membership"
+              : "failed",
+        );
+      }
+      headers.set("Location", target.href);
+      return new Response(null, { status: 302, headers });
+    }
     if (request.method === "GET" && action === "mcp/status")
       return Response.json(await users.mcpStatus(request), {
         headers: { "Cache-Control": "no-store" },
       });
     if (request.method === "GET" && action === "workspaces")
       return Response.json(await users.listWorkspaces(request));
+    if (request.method === "GET" && action === "workspaces/available")
+      return Response.json(await users.availableGitHubWorkspaces(request), {
+        headers: { "Cache-Control": "no-store" },
+      });
     if (request.method === "GET" && action === "workspace")
       return Response.json(await users.workspace(request));
     if (request.method === "GET" && action === "me") {
@@ -49,6 +99,10 @@ async function handle(request: Request, action: string) {
     if (Buffer.byteLength(text) > 12000)
       throw new DomainError("요청이 너무 큽니다.", 413);
     const body = text ? JSON.parse(text) : {};
+    if (action === "github/disconnect-token")
+      return Response.json({
+        user: await users.disconnectPersonalGitHub(request),
+      });
     if (action === "register" || action === "login") {
       const result =
         action === "register"
@@ -61,6 +115,8 @@ async function handle(request: Request, action: string) {
     }
     if (action === "workspaces")
       return Response.json(await users.createWorkspace(request, body));
+    if (action === "workspaces/join")
+      return Response.json(await users.joinGitHubWorkspace(request, body));
     if (action === "workspaces/switch")
       return Response.json(await users.switchWorkspace(request, body));
     if (action === "invites/accept")

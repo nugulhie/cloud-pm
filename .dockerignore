@@ -1,15 +1,16 @@
-node_modules
-.next
-.next-e2e
-.next-pm
-.next-*
-.data
-.env*
+# Only application sources, static assets, and build configuration enter images.
+**
+!package.json
+!package-lock.json
+!next.config.ts
+!next-env.d.ts
+!tsconfig.json
+!src/
+!src/**
+!public/
+!public/**
+
+# Keep local configuration excluded even inside an allowed source directory.
 **/.env*
-.npmrc
 **/.npmrc
-.git
-dist
-test-results
-playwright-report
-*.tsbuildinfo
+**/*.tsbuildinfo

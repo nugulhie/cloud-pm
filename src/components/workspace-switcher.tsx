@@ -16,6 +16,10 @@ export default function WorkspaceSwitcher({
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
+  const [available, setAvailable] = useState<
+      { id: string; name: string; description: string }[] | null
+    >(null),
+    [joinNotice, setJoinNotice] = useState("");
   async function call(path: string, body?: unknown) {
     const response = await fetch(`/api/auth/${path}`, {
       method: body === undefined ? "GET" : "POST",
@@ -139,6 +143,60 @@ export default function WorkspaceSwitcher({
             </button>
           ))}
         </div>
+        <section className="workspace-org-join">
+          <h3>조직 워크스페이스 참여</h3>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async () => {
+              setJoinNotice("");
+              try {
+                setAvailable((await call("workspaces/available")).workspaces);
+              } catch (e) {
+                setJoinNotice((e as Error).message);
+              }
+            }}
+          >
+            참여 가능한 조직 워크스페이스 찾기
+          </button>
+          {joinNotice && (
+            <p className="section-description">
+              {joinNotice}{" "}
+              <a href="/api/auth/github/start?intent=link">
+                GitHub 계정 다시 확인
+              </a>
+            </p>
+          )}
+          {available?.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setJoinNotice("");
+                try {
+                  await call("workspaces/join", { id: w.id });
+                  await load();
+                  await onChanged(w.id);
+                  setOpen(false);
+                  setAvailable(null);
+                } catch (e) {
+                  setJoinNotice((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {w.name} · 참여하기
+            </button>
+          ))}
+          {available?.length === 0 && (
+            <p className="muted">
+              현재 새로 참여할 수 있는 조직 워크스페이스가 없습니다.
+            </p>
+          )}
+        </section>
         <form
           className="workspace-create-form"
           onSubmit={async (e) => {

@@ -13,6 +13,30 @@ chmod 600 deploy/.env.production
 
 GitHub 수집용 토큰·웹훅 키는 필요에 따라 설정합니다. Claude가 MCP 도구를 호출하는 데에는 `ANTHROPIC_API_KEY`가 필요하지 않습니다. 서버 AI 분석 기능에만 AI 제공자 설정이 필요합니다.
 
+## Docker 이미지 빌드
+
+`Dockerfile`은 공통 Node.js 24 Alpine 기반에서 웹과 작업자를 별도 이미지로 만듭니다.
+`web`은 Next.js standalone 결과만 포함하고, `worker`는 `npm ci --omit=dev --omit=peer`로
+설치한 운영 의존성과 소스를 포함합니다. 작업자 실행에 필요한 `tsx`는 운영
+의존성에 두며 테스트·타입 검사 도구는 작업자 이미지에서 제외합니다. 작업자용
+패키지 메타데이터에서 개발 의존성 선언을 제거해 Next.js의 선택적 peer인 Playwright도
+설치하지 않습니다. 저장소의 개발 의존성 선언과 패키지 버전은 유지합니다. 작업자가 직접 사용하는 패키지는
+`dependencies`에 명시해야 합니다.
+
+```sh
+docker build --target web -t cloud-pm-agent:web-local .
+docker build --target worker -t cloud-pm-agent:worker-local .
+```
+
+EC2용 이미지는 각 명령에 `--platform linux/amd64`를 추가합니다. 기본 빌드 대상은
+`web`이며 기존 Compose의 빌드 대상과 실행 명령을 유지합니다. 기반 이미지를
+고정하려면 `--build-arg NODE_IMAGE=node:24-alpine@sha256:<digest>`를 지정합니다.
+npm 다운로드 캐시를 사용하는 BuildKit 빌드가 필요합니다.
+
+`.dockerignore`는 소스·`public/`·패키지 파일·Next.js/TypeScript 설정만 허용합니다.
+빌드에 새로운 루트 파일이 필요해지면 이 허용 목록도 함께 수정하세요. 환경변수는
+이미지를 빌드할 때 넣지 않고 Compose 실행 시 전달합니다.
+
 ## 실행
 
 ```sh

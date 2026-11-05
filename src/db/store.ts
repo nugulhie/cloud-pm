@@ -48,7 +48,19 @@ CREATE TABLE IF NOT EXISTS mcp_connections (workspace_id TEXT NOT NULL,user_id T
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS github_login TEXT;
 UPDATE app_users SET github_login=login WHERE github_login IS NULL AND github_cipher<>'';
 CREATE TABLE IF NOT EXISTS workspace_github (workspace_id TEXT PRIMARY KEY REFERENCES workspace_settings(id) ON DELETE CASCADE,github_cipher TEXT NOT NULL,github_last4 TEXT NOT NULL,github_login TEXT NOT NULL,repositories JSONB NOT NULL DEFAULT '[]',permissions_at TIMESTAMPTZ NOT NULL DEFAULT now());
-CREATE TABLE IF NOT EXISTS login_attempts (login TEXT PRIMARY KEY,attempts INTEGER NOT NULL,window_at TIMESTAMPTZ NOT NULL DEFAULT now());`;
+CREATE TABLE IF NOT EXISTS login_attempts (login TEXT PRIMARY KEY,attempts INTEGER NOT NULL,window_at TIMESTAMPTZ NOT NULL DEFAULT now());
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS github_id TEXT;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS github_org TEXT;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS github_org_verified_at TIMESTAMPTZ;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS auth_provider TEXT NOT NULL DEFAULT 'password';
+CREATE UNIQUE INDEX IF NOT EXISTS app_users_github_identity ON app_users(github_id) WHERE github_id IS NOT NULL;
+ALTER TABLE workspace_settings ADD COLUMN IF NOT EXISTS github_org_join BOOLEAN NOT NULL DEFAULT false;
+WITH migration AS (INSERT INTO app_migrations(id) VALUES('github-org-join-main-v1') ON CONFLICT DO NOTHING RETURNING id) UPDATE workspace_settings SET github_org_join=true WHERE id='main' AND EXISTS(SELECT 1 FROM migration);
+CREATE TABLE IF NOT EXISTS github_oauth_states (
+ state_hash TEXT PRIMARY KEY,browser_hash TEXT NOT NULL,verifier_cipher TEXT NOT NULL,
+ intent TEXT NOT NULL,link_user_id TEXT REFERENCES app_users(id) ON DELETE CASCADE,
+ link_session_hash TEXT,expires_at TIMESTAMPTZ NOT NULL,used_at TIMESTAMPTZ);
+CREATE INDEX IF NOT EXISTS github_oauth_expiry ON github_oauth_states(expires_at);`;
 export class Store {
   public workspaceId = "main";
   forWorkspace(workspaceId: string) {

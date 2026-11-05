@@ -221,6 +221,11 @@ export async function importAsana(
       const target = fields[field];
       if (target) value[target] = row[target as keyof typeof row];
     }
+    if (
+      old &&
+      (row.fields.includes("assignee") || row.fields.includes("assigneeEmail"))
+    )
+      delete value.assigneeUserId;
     if (!old || (row.fields.includes("parentRef") && !row.unresolvedParent))
       value.parentId = row.parentSourceId
         ? parentTaskId(row.parentSourceId)

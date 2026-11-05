@@ -27,6 +27,10 @@ interface User {
   password_hash: string;
   github_cipher: string;
   github_login: string | null;
+  github_id?: string | null;
+  github_org?: string | null;
+  github_org_verified_at?: string | null;
+  auth_provider?: string;
   github_last4: string;
   repositories: string[];
   permissions_at: string;
@@ -45,6 +49,9 @@ export const publicUser = (u: User) => ({
   githubTokenLast4: u.github_last4,
   githubLogin: u.github_login,
   githubConnected: !!u.github_cipher,
+  githubId: u.github_id ?? null,
+  githubOAuthConnected: !!u.github_id,
+  authProvider: u.auth_provider ?? "password",
   serviceTokenLast4: u.api_last4,
   serviceTokenRole: u.api_role,
   serviceTokenWorkspaceId: u.api_workspace_id ?? "main",
@@ -57,12 +64,124 @@ export class Users {
     private store: Store,
     private fetcher: typeof fetch = fetch,
   ) {}
+  async completeGitHubIdentity(
+    identity: { id: string; login: string; name: string; org: string },
+    linkUserId?: string,
+  ) {
+    const user = await this.store.transaction(async (store) => {
+      await store.query(
+        "SELECT id FROM workspace_settings WHERE id='main' FOR UPDATE",
+      );
+      let owner = (
+        await store.query<User>(
+          "SELECT * FROM app_users WHERE github_id=$1 FOR UPDATE",
+          [identity.id],
+        )
+      )[0];
+      if (linkUserId) {
+        if (owner && owner.id !== linkUserId)
+          throw new DomainError(
+            "이 GitHub 계정은 다른 서비스 계정에 연결되어 있습니다.",
+            409,
+          );
+        const linked = (
+          await store.query<User>(
+            "SELECT * FROM app_users WHERE id=$1 FOR UPDATE",
+            [linkUserId],
+          )
+        )[0];
+        if (!linked)
+          throw new DomainError("기존 계정으로 다시 로그인하세요.", 401);
+        if (linked.github_id && linked.github_id !== identity.id)
+          throw new DomainError(
+            "이미 다른 GitHub 계정이 연결되어 있습니다.",
+            409,
+          );
+        if (
+          linked.github_cipher &&
+          linked.github_login?.toLowerCase() !== identity.login.toLowerCase()
+        )
+          throw new DomainError(
+            "기존 개인 GitHub 토큰을 해제한 뒤 계정을 연결하세요.",
+            409,
+          );
+        owner = linked;
+      }
+      const main = (
+        await store.query<{ github_org_join: boolean }>(
+          "SELECT github_org_join FROM workspace_settings WHERE id='main'",
+        )
+      )[0];
+      if (!owner) {
+        if (main && !main.github_org_join)
+          throw new DomainError(
+            "조직 계정 가입이 허용되지 않았습니다. 관리자에게 문의하세요.",
+            403,
+          );
+        let login = identity.login.toLowerCase();
+        if (
+          login.length < 3 ||
+          (
+            await store.query("SELECT id FROM app_users WHERE login=$1", [
+              login,
+            ])
+          ).length
+        )
+          login = `gh-${identity.id}`;
+        if (
+          (
+            await store.query("SELECT id FROM app_users WHERE login=$1", [
+              login,
+            ])
+          ).length
+        )
+          login = `gh-${randomUUID().replaceAll("-", "").slice(0, 30)}`;
+        owner = (
+          await store.query<User>(
+            "INSERT INTO app_users(id,login,display_name,password_hash,github_cipher,github_last4,auth_provider) VALUES($1,$2,$3,$4,'','','github') RETURNING *",
+            [
+              randomUUID(),
+              login,
+              identity.name.slice(0, 100) || identity.login,
+              await hashPassword(randomBytes(32).toString("base64url")),
+            ],
+          )
+        )[0]!;
+      }
+      owner = (
+        await store.query<User>(
+          "UPDATE app_users SET github_id=$2,github_login=$3,github_org=$4,github_org_verified_at=now(),updated_at=now() WHERE id=$1 RETURNING *",
+          [
+            owner.id,
+            identity.id,
+            identity.login.toLowerCase(),
+            identity.org.toLowerCase(),
+          ],
+        )
+      )[0]!;
+      const removed = await store
+        .forWorkspace("main")
+        .get<{ state: string }>("membership", owner.id);
+      if ((!main || main.github_org_join) && removed?.data.state !== "removed")
+        await new Workspaces(store, owner.id).joinDefault();
+      return owner;
+    });
+    return this.newSession(user);
+  }
   private async sharedGithub(workspaceId: string): Promise<{
     token: string;
     repositories: string[];
     tokenProvider?: () => Promise<string>;
   } | null> {
-    if (workspaceId === appWorkspaceId()) {
+    if (
+      workspaceId === appWorkspaceId() ||
+      (
+        await this.store.query<{ github_org_join: boolean }>(
+          "SELECT github_org_join FROM workspace_settings WHERE id=$1",
+          [workspaceId],
+        )
+      )[0]?.github_org_join
+    ) {
       const app = configuredGitHubApp(this.fetcher);
       if (app) {
         const access = await app.access();
@@ -356,7 +475,13 @@ export class Users {
     const useApp =
       requireAccess &&
       requireWorkspace &&
-      workspaceId === appWorkspaceId() &&
+      (workspaceId === appWorkspaceId() ||
+        (
+          await this.store.query<{ github_org_join: boolean }>(
+            "SELECT github_org_join FROM workspace_settings WHERE id=$1",
+            [workspaceId],
+          )
+        )[0]?.github_org_join) &&
       githubAppConfigured();
     let githubToken: string | undefined;
     let githubTokenProvider: (() => Promise<string>) | undefined;
@@ -463,6 +588,7 @@ export class Users {
       viewerId: resolved.user.id,
       role: workspace.role,
       inviteOnly: workspace.invite_only,
+      githubOrgJoin: workspace.github_org_join,
     };
   }
 
@@ -478,7 +604,10 @@ export class Users {
           error?: string;
         }
       | undefined;
-    if (access.workspaceId === appWorkspaceId() && githubAppConfigured()) {
+    if (
+      (access.workspaceId === appWorkspaceId() || access.githubOrgJoin) &&
+      githubAppConfigured()
+    ) {
       try {
         const app = configuredGitHubApp(this.fetcher)!;
         const scope = await app.access();
@@ -544,6 +673,7 @@ export class Users {
             }
           : null),
       inviteOnly: access.inviteOnly,
+      githubOrgJoin: access.githubOrgJoin,
       admin: access.admin,
       viewerId: access.viewerId,
       role: access.role,
@@ -579,16 +709,83 @@ export class Users {
         "워크스페이스 관리자만 설정을 변경할 수 있습니다.",
         403,
       );
-    const { inviteOnly } = z.object({ inviteOnly: z.boolean() }).parse(input);
-    if (access.workspaceId !== "main" && !inviteOnly)
+    const { inviteOnly, githubOrgJoin } = z
+      .strictObject({
+        inviteOnly: z.boolean().optional(),
+        githubOrgJoin: z.boolean().optional(),
+      })
+      .refine(
+        (v) => v.inviteOnly !== undefined || v.githubOrgJoin !== undefined,
+      )
+      .parse(input);
+    if (access.workspaceId !== "main" && inviteOnly === false)
       throw new DomainError(
         "새 워크스페이스는 초대받은 멤버만 참여할 수 있습니다.",
       );
     await this.store.query(
-      "UPDATE workspace_settings SET invite_only=$1 WHERE id=$2",
-      [inviteOnly, access.workspaceId],
+      "UPDATE workspace_settings SET invite_only=COALESCE($1,invite_only),github_org_join=COALESCE($3,github_org_join) WHERE id=$2",
+      [inviteOnly ?? null, access.workspaceId, githubOrgJoin ?? null],
     );
     return this.workspace(request);
+  }
+  private async githubJoinIdentity(request: Request) {
+    this.requireSession(request);
+    const resolved = await this.resolve(request, false, false);
+    if (!resolved.user) throw new DomainError("로그인이 필요합니다.", 401);
+    const identity = (
+      await this.store.query<User>("SELECT * FROM app_users WHERE id=$1", [
+        resolved.user.id,
+      ])
+    )[0]!;
+    if (
+      !identity.github_id ||
+      identity.github_org?.toLowerCase() !==
+        (process.env.GITHUB_ORG ?? "").toLowerCase() ||
+      !identity.github_org_verified_at ||
+      Date.now() - Date.parse(identity.github_org_verified_at) > 600000
+    )
+      throw new DomainError(
+        "공개 워크스페이스 참여 전 GitHub 계정을 다시 인증하세요.",
+        403,
+      );
+    return identity;
+  }
+  async availableGitHubWorkspaces(request: Request) {
+    const user = await this.githubJoinIdentity(request);
+    return {
+      workspaces: await this.store.query<{
+        id: string;
+        name: string;
+        description: string;
+      }>(
+        "SELECT w.id,w.name,w.description FROM workspace_settings w WHERE w.github_org_join=true AND NOT EXISTS(SELECT 1 FROM workspace_members m WHERE m.workspace_id=w.id AND m.user_id=$1) AND NOT EXISTS(SELECT 1 FROM records r WHERE r.workspace_id=w.id AND r.kind='membership' AND r.id=$1 AND r.data->>'state'='removed') ORDER BY w.name,w.id",
+        [user.id],
+      ),
+    };
+  }
+  async joinGitHubWorkspace(request: Request, input: unknown) {
+    const { id } = z
+        .strictObject({ id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/) })
+        .parse(input),
+      user = await this.githubJoinIdentity(request);
+    await this.store.transaction(async (store) => {
+      const target = (
+        await store.query<{ github_org_join: boolean }>(
+          "SELECT github_org_join FROM workspace_settings WHERE id=$1 FOR UPDATE",
+          [id],
+        )
+      )[0];
+      const removed = await store
+        .forWorkspace(id)
+        .get<{ state: string }>("membership", user.id);
+      if (!target?.github_org_join || removed?.data.state === "removed")
+        throw new DomainError("참여 가능한 워크스페이스가 아닙니다.", 403);
+      await store.query(
+        "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'member') ON CONFLICT DO NOTHING",
+        [id, user.id],
+      );
+    });
+    return this.switchWorkspace(request, { id });
   }
   async createInvite(request: Request, input: unknown) {
     const access = await this.workspaceAdmin(request);
@@ -636,6 +833,17 @@ export class Users {
       [id, access.workspaceId],
     );
     return { revoked: true };
+  }
+  async disconnectPersonalGitHub(request: Request) {
+    this.requireSession(request);
+    const user = await this.profile(request);
+    const updated = (
+      await this.store.query<User>(
+        "UPDATE app_users SET github_cipher='',github_last4='',repositories='[]'::jsonb,github_login=CASE WHEN github_id IS NULL THEN NULL ELSE github_login END,permissions_at=now(),updated_at=now() WHERE id=$1 RETURNING *",
+        [user.id],
+      )
+    )[0]!;
+    return publicUser(updated);
   }
   async listWorkspaces(request: Request) {
     this.requireSession(request);

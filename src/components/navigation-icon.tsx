@@ -10,6 +10,9 @@ export default function NavigationIcon({ index }: { index: number }) {
     "M6 3h9l4 4v14H6z M14 3v5h5 M9 12h7 M9 16h7",
     "M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z M8 12l3 3 5-6",
     "M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z M13 7a3 3 0 0 1 3-3h5v14h-5a4 4 0 0 0-3 3",
+    "M3 20h18 M6 17v-6 M12 17V5 M18 17v-9",
+    "M5 3v18 M5 4h13l-3 4 3 4H5 M9 17h11",
+    "M9 7a3 3 0 1 0-6 0 3 3 0 0 0 6 0 M2 20v-3a4 4 0 0 1 8 0v3 M15 7h7 M19 4l3 3-3 3 M22 17h-7 M18 14l-3 3 3 3",
   ];
   return (
     <svg
