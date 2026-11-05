@@ -1,5 +1,7 @@
 # 운영 배포와 Claude 연결
 
+새 조직의 최초 소유자 설정과 기존 DB·GitHub 연결의 이전은 [운영 튜토리얼](operations-tutorial.md)을 따릅니다. 외부 PostgreSQL은 `compose.external-db.yaml`과 `deploy/external-db.env.example`을 사용합니다. 아래 `compose.production.yaml`은 서버 안의 DB를 함께 실행하는 구성입니다.
+
 ## 준비
 
 Docker Compose를 사용할 서버와 해당 서버를 가리키는 DNS 도메인이 필요합니다. Claude의 원격 MCP 요청은 Anthropic 서버에서 오므로 공개 HTTPS 주소를 사용합니다. [Claude 공식 안내](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp)

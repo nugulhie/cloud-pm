@@ -10,19 +10,20 @@
 
 [조직 App 등록](https://github.com/organizations/soldoc-kr/settings/apps/new)에서 다음 값을 확인합니다. 로컬 `.data/aws-deploy/github-app-registration-url.txt`에는 같은 값이 채워진 URL이 있습니다. App 이름이 사용 중이면 고유한 이름을 선택합니다.
 
-| 항목                          | 값                                                  |
-| ----------------------------- | --------------------------------------------------- |
-| App 이름                      | `cloud-pm-agent-soldoc`                             |
-| Homepage URL                  | `https://cloud-pm.soldoc.co.kr`                     |
-| Setup URL                     | `https://cloud-pm.soldoc.co.kr/`                    |
-| Webhook URL                   | `https://cloud-pm.soldoc.co.kr/api/webhooks/github` |
-| Webhook                       | Active, SSL verification 활성화                     |
-| 설치 범위                     | Only on this account                                |
-| OAuth 사용자 승인·Device Flow | 사용하지 않음. Callback URL 불필요                  |
+| 항목         | 값                                                       |
+| ------------ | -------------------------------------------------------- |
+| App 이름     | `cloud-pm-agent-soldoc`                                  |
+| Homepage URL | `https://cloud-pm.soldoc.co.kr`                          |
+| Setup URL    | `https://cloud-pm.soldoc.co.kr/`                         |
+| Webhook URL  | `https://cloud-pm.soldoc.co.kr/api/webhooks/github`      |
+| Webhook      | Active, SSL verification 활성화                          |
+| 설치 범위    | Only on this account                                     |
+| Callback URL | `https://cloud-pm.soldoc.co.kr/api/auth/github/callback` |
+| Device Flow  | 사용하지 않음                                            |
 
 Webhook secret에는 로컬 `.data/aws-deploy/github-app-webhook-secret.txt`의 값을 입력합니다. 이 파일은 권한 `600`이며 기존 조직 웹훅 비밀키와 별도로 생성했습니다. 비밀키를 URL·이슈·채팅에 붙이지 않습니다. 파일이 없으면 관리자가 새 비밀키를 만들어 GitHub와 서버에 동일하게 설정합니다.
 
-Repository permissions는 **Metadata·Contents·Pull requests·Checks·Commit statuses: Read-only**, **Issues: Read and write**로 설정합니다. 조직·개인 계정 권한과 Contents 쓰기 권한은 요청하지 않습니다. [권한 선택](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app)
+Repository permissions는 **Metadata·Contents·Pull requests·Checks·Commit statuses: Read-only**, **Issues: Read and write**로 설정합니다. GitHub OAuth 가입·기존 계정 연결에는 Organization permissions의 **Members: Read-only**도 필요합니다. 앱 설정을 저장한 뒤 조직의 **Installed GitHub Apps → Configure**에서도 권한 변경을 승인합니다. Contents 쓰기 권한은 요청하지 않습니다. [권한 선택](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app)
 
 이벤트는 `pull_request`, `pull_request_review`, `pull_request_review_comment`, `issues`, `issue_comment`, `push`, `check_run`, `check_suite`, `status`, `repository`를 선택합니다. 설치 변경 이벤트도 처리합니다.
 
@@ -30,7 +31,7 @@ Repository permissions는 **Metadata·Contents·Pull requests·Checks·Commit st
 
 1. **Create GitHub App → Install App → soldoc-kr**에서 수집할 저장소를 선택하고 설치합니다. 설치 범위에 빠진 저장소는 조회되지 않습니다.
 2. General의 **App ID**를 기록하고 **Generate a private key**로 PEM 파일을 내려받습니다. 서버 작업자에게 App ID와 이 컴퓨터에 저장된 PEM의 **경로**를 전달합니다. PEM 본문을 채팅에 복사하지 않습니다.
-3. 웹과 작업자에 아래 설정을 함께 적용합니다. 운영 Compose에서는 PEM을 base64 한 줄로 인코딩해 보호된 `.env.production`에 저장합니다. base64는 암호화가 아닙니다. 기존 `TOKEN_ENCRYPTION_KEY`는 변경하지 않습니다.
+3. 공통 App 설정은 웹과 작업자에 적용합니다. OAuth Client Secret은 웹에만 전달하며 제공된 Compose 구성이 이를 분리합니다. 운영 Compose에서는 PEM을 base64 한 줄로 인코딩해 보호된 환경 파일에 저장합니다. base64는 암호화가 아닙니다. 기존 `TOKEN_ENCRYPTION_KEY`는 변경하지 않습니다.
 
 ```dotenv
 GITHUB_ORG=soldoc-kr
@@ -38,13 +39,17 @@ GITHUB_APP_ID=<App ID>
 GITHUB_APP_PRIVATE_KEY_BASE64=<PEM의 base64 값>
 GITHUB_APP_WORKSPACE_ID=main
 GITHUB_APP_WEBHOOK_SECRET=<등록 화면에 입력한 secret>
-# 선택: GITHUB_APP_CLIENT_ID, GITHUB_APP_INSTALLATION_ID
+# GitHub OAuth용: 위 Callback URL 등록과 Members 읽기·설치 승인이 필요합니다.
+GITHUB_APP_CLIENT_ID=<Client ID>
+GITHUB_OAUTH_CLIENT_ID=<동일 App의 Client ID>
+GITHUB_OAUTH_CLIENT_SECRET=<Client Secret>
+# 선택: GITHUB_APP_INSTALLATION_ID
 # 로컬에서는 BASE64 대신 GITHUB_APP_PRIVATE_KEY_PATH=/절대경로/app.pem
 ```
 
 설치 ID는 조직에서 자동 조회합니다. JWT로 설치 토큰을 발급하고 만료 60초 전부터 새 토큰을 발급합니다. GitHub 설치 토큰은 일반적으로 1시간 유효합니다. 키 파일 교체·환경 변경 후에는 웹과 작업자를 재시작합니다. [설치 인증](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app-installation)
 
-App은 지정한 워크스페이스에만 공유됩니다. 다른 공간의 개인·공용 PAT 동작은 유지합니다. App 설정이 없으면 기존 PAT를 사용하지만, App을 설정한 뒤 인증이 실패하면 PAT로 자동 우회하지 않습니다. 기존 공용 PAT는 연결 검증 후 관리자가 별도로 폐기합니다.
+App은 지정한 워크스페이스와 관리자가 GitHub 조직 구성원 참여를 허용한 공간에 공유됩니다. 다른 공간의 개인·공용 PAT 동작은 유지합니다. App 설정이 없으면 기존 PAT를 사용하지만, App을 설정한 뒤 인증이 실패하면 PAT로 자동 우회하지 않습니다. 기존 공용 PAT는 연결 검증 후 관리자가 별도로 폐기합니다.
 
 ## 3. 웹훅 네트워크와 확인
 
@@ -68,3 +73,7 @@ npx tsx --test tests/github-app.test.ts
 npx playwright test e2e/github-app.spec.ts
 postman simulation run postman/simulations/github-app.sim.yaml --proxy --no-history --lift 'node --use-env-proxy --import tsx tests/github-app-simulation.ts'
 ```
+
+## 새 조직과 서버·DB 이전
+
+다른 조직의 App·최초 소유자 생성, 기존 조직 연결을 유지한 환경 이전은 [운영 튜토리얼](operations-tutorial.md)을 따릅니다. `TOKEN_ENCRYPTION_KEY`와 기존 DB를 함께 보존하고, 도메인이 바뀌면 Callback·Webhook URL도 갱신합니다.
