@@ -55,6 +55,13 @@ export default function SavedViewsBar({
         (admin && current.data.visibility === "workspace"));
   const set = (patch: Partial<TaskFilters>) =>
     onApply({ ...filters, ...patch });
+  const advancedFilterCount = [
+    filters.assigneeUserId,
+    filters.priorities?.length,
+    filters.sprintId,
+    filters.dueAfter,
+    filters.dueBefore,
+  ].filter(Boolean).length;
   return (
     <div className="saved-views-bar" aria-label="저장한 보기와 공유 필터">
       <div className="planning-toolbar">
@@ -127,93 +134,101 @@ export default function SavedViewsBar({
           </>
         )}
       </div>
-      <div className="planning-toolbar">
-        <label>
-          담당 계정
-          <select
-            aria-label="담당 계정 필터"
-            value={filters.assigneeUserId ?? ""}
-            onChange={(e) =>
-              set({
-                assigneeUserId: (e.target.value ||
-                  undefined) as TaskFilters["assigneeUserId"],
-                assignee: undefined,
-              })
-            }
-          >
-            <option value="">모든 계정</option>
-            {viewerId && <option value="me">내 작업</option>}
-            <option value="unassigned">계정 미매칭·미지정</option>
-            {filters.assigneeUserId &&
-              !["me", "unassigned"].includes(filters.assigneeUserId) &&
-              !people.data?.items.some(
-                (p) => p.id === filters.assigneeUserId,
-              ) && (
-                <option value={filters.assigneeUserId}>저장된 담당 계정</option>
-              )}
-            {people.data?.items.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.displayName} · @{p.githubLogin ?? p.login}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          우선순위
-          <select
-            aria-label="우선순위 필터"
-            value={
-              filters.priorities?.length === 1 ? filters.priorities[0] : ""
-            }
-            onChange={(e) =>
-              set({
-                priorities: e.target.value
-                  ? [e.target.value as "low" | "medium" | "high"]
-                  : undefined,
-              })
-            }
-          >
-            <option value="">모든 우선순위</option>
-            <option value="high">높음</option>
-            <option value="medium">보통</option>
-            <option value="low">낮음</option>
-          </select>
-        </label>
-        <label>
-          스프린트
-          <select
-            aria-label="스프린트 필터"
-            value={filters.sprintId ?? ""}
-            onChange={(e) => set({ sprintId: e.target.value || undefined })}
-          >
-            <option value="">모든 스프린트</option>
-            <option value="backlog">프로젝트 백로그</option>
-            {sprints.data?.map((s) => (
-              <option key={s.data.id} value={s.data.id}>
-                {s.data.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          마감일 이후
-          <input
-            aria-label="마감일 이후"
-            type="date"
-            value={filters.dueAfter ?? ""}
-            onChange={(e) => set({ dueAfter: e.target.value || undefined })}
-          />
-        </label>
-        <label>
-          마감일 이전
-          <input
-            aria-label="마감일 이전"
-            type="date"
-            value={filters.dueBefore ?? ""}
-            onChange={(e) => set({ dueBefore: e.target.value || undefined })}
-          />
-        </label>
-      </div>
+      <details className="saved-view-filters">
+        <summary>
+          담당자·일정 필터
+          {advancedFilterCount > 0 && <span>{advancedFilterCount}개 적용</span>}
+        </summary>
+        <div className="planning-toolbar">
+          <label>
+            담당 계정
+            <select
+              aria-label="담당 계정 필터"
+              value={filters.assigneeUserId ?? ""}
+              onChange={(e) =>
+                set({
+                  assigneeUserId: (e.target.value ||
+                    undefined) as TaskFilters["assigneeUserId"],
+                  assignee: undefined,
+                })
+              }
+            >
+              <option value="">모든 계정</option>
+              {viewerId && <option value="me">내 작업</option>}
+              <option value="unassigned">계정 미매칭·미지정</option>
+              {filters.assigneeUserId &&
+                !["me", "unassigned"].includes(filters.assigneeUserId) &&
+                !people.data?.items.some(
+                  (p) => p.id === filters.assigneeUserId,
+                ) && (
+                  <option value={filters.assigneeUserId}>
+                    저장된 담당 계정
+                  </option>
+                )}
+              {people.data?.items.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.displayName} · @{p.githubLogin ?? p.login}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            우선순위
+            <select
+              aria-label="우선순위 필터"
+              value={
+                filters.priorities?.length === 1 ? filters.priorities[0] : ""
+              }
+              onChange={(e) =>
+                set({
+                  priorities: e.target.value
+                    ? [e.target.value as "low" | "medium" | "high"]
+                    : undefined,
+                })
+              }
+            >
+              <option value="">모든 우선순위</option>
+              <option value="high">높음</option>
+              <option value="medium">보통</option>
+              <option value="low">낮음</option>
+            </select>
+          </label>
+          <label>
+            스프린트
+            <select
+              aria-label="스프린트 필터"
+              value={filters.sprintId ?? ""}
+              onChange={(e) => set({ sprintId: e.target.value || undefined })}
+            >
+              <option value="">모든 스프린트</option>
+              <option value="backlog">프로젝트 백로그</option>
+              {sprints.data?.map((s) => (
+                <option key={s.data.id} value={s.data.id}>
+                  {s.data.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            마감일 이후
+            <input
+              aria-label="마감일 이후"
+              type="date"
+              value={filters.dueAfter ?? ""}
+              onChange={(e) => set({ dueAfter: e.target.value || undefined })}
+            />
+          </label>
+          <label>
+            마감일 이전
+            <input
+              aria-label="마감일 이전"
+              type="date"
+              value={filters.dueBefore ?? ""}
+              onChange={(e) => set({ dueBefore: e.target.value || undefined })}
+            />
+          </label>
+        </div>
+      </details>
       {(query.error || action.error) && !dialog && (
         <p role="alert" className="alert">
           {action.error || query.error}

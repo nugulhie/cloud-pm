@@ -135,7 +135,7 @@ test("저장소를 검색·선택하여 프로젝트를 만들고 변경 이력�
     page.getByRole("heading", { name: "태스크 진행 현황" }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "＋ 프로젝트 만들기", exact: true })
+    .getByRole("button", { name: "프로젝트 만들기", exact: true })
     .click();
   const form = page.getByRole("dialog", { name: "프로젝트 등록" });
   const name = `플랫폼 개편 ${Date.now()}`;

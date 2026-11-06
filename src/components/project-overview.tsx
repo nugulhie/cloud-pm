@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import InterfaceIcon from "./interface-icon";
 import type { Project, Stored, Task } from "../core/model";
 
 export default function ProjectOverview({
@@ -89,8 +90,19 @@ export default function ProjectOverview({
           프로젝트 관리
         </button>
       </div>
-      <div className="projects project-overview-grid">
-        {visible.slice(0, limit).map((row) => {
+      <div
+        className={`projects project-overview-grid project-ledger${visible.length ? " project-ledger-populated" : ""}`}
+      >
+        {!!visible.length && (
+          <div className="project-overview-labels" aria-hidden="true">
+            <span>프로젝트</span>
+            <span>진행 현황</span>
+            <span>담당자</span>
+            <span>일정 · 확인 사항</span>
+            <span />
+          </div>
+        )}
+        {visible.slice(0, limit).map((row, index) => {
           const project = row.data,
             summary = summaries.get(project.id);
           const total = (summary?.total ?? 0) - (summary?.canceled ?? 0);
@@ -100,20 +112,36 @@ export default function ProjectOverview({
           return (
             <div
               key={project.id}
-              className="project-summary"
+              className="project-summary project-ledger-row"
               data-project-id={project.id}
             >
               <div className="project-summary-details">
-                <button
-                  className="project-open"
-                  onClick={() => onSelect(project.id)}
-                >
-                  <strong>{project.name}</strong>
-                  <span aria-hidden="true">↗</span>
-                </button>
+                <div className="project-identity">
+                  <span className="project-code">
+                    {project.featurePrefix ||
+                      String(index + 1).padStart(2, "0")}
+                  </span>
+                  <button
+                    className="project-open"
+                    onClick={() => onSelect(project.id)}
+                  >
+                    <strong>{project.name}</strong>
+                    <InterfaceIcon name="chevron" />
+                  </button>
+                </div>
                 <p className="project-goal">
                   {project.goal || "프로젝트 목표를 등록해 주세요."}
                 </p>
+                <small
+                  className="project-repositories"
+                  title={project.repositories.join(" · ")}
+                >
+                  {project.repositories.length
+                    ? `${project.repositories.length}개 저장소 · ${project.repositories.join(" · ")}`
+                    : "GitHub 저장소 미연결 · 나중에 연결할 수 있습니다."}
+                </small>
+              </div>
+              <div className="project-summary-progress">
                 <div className="project-progress-label">
                   <span>
                     {done} / {total}개 완료
@@ -125,38 +153,52 @@ export default function ProjectOverview({
                   max={100}
                   value={percent}
                 />
-                <div className="project-summary-meta">
-                  <span>
-                    {project.startDate || "시작일 미정"} ~{" "}
-                    {project.endDate || "종료일 미정"}
-                  </span>
-                  <span className={summary?.blocked ? "project-blocked" : ""}>
-                    차단 {summary?.blocked ?? 0}개
-                  </span>
-                </div>
-                <p className="project-people">
-                  담당자{" "}
-                  {people.length
-                    ? `${people.slice(0, 3).join(", ")}${people.length > 3 ? ` 외 ${people.length - 3}명` : ""}`
-                    : "미지정"}
-                </p>
-                <small>
-                  {project.repositories.join(" · ") ||
-                    "GitHub 저장소 미연결 · 나중에 연결할 수 있습니다."}
-                  {summary?.canceled
-                    ? ` · 취소 ${summary.canceled}개 제외`
-                    : ""}
-                </small>
+                {!!summary?.canceled && (
+                  <small>취소 {summary.canceled}개 제외</small>
+                )}
               </div>
-              {writable && (
+              <div className="project-assignees">
+                <div className="project-avatar-stack" aria-hidden="true">
+                  {people.slice(0, 3).map((person) => (
+                    <span key={person}>
+                      {person.replace(/^@/, "").slice(0, 2).toUpperCase()}
+                    </span>
+                  ))}
+                  {!people.length && (
+                    <span className="project-avatar-empty">—</span>
+                  )}
+                </div>
+                <p className="project-people" title={people.join(", ")}>
+                  {people.length
+                    ? `${people.slice(0, 2).join(", ")}${people.length > 2 ? ` 외 ${people.length - 2}명` : ""}`
+                    : "담당자 미지정"}
+                </p>
+              </div>
+              <div className="project-summary-meta">
+                <span>
+                  {project.startDate || "시작일 미정"} ~{" "}
+                  {project.endDate || "종료일 미정"}
+                </span>
+                <span
+                  className={
+                    summary?.blocked ? "project-blocked" : "project-unblocked"
+                  }
+                >
+                  차단 {summary?.blocked ?? 0}개
+                </span>
+              </div>
+              {writable ? (
                 <button
                   className="button danger project-delete"
                   aria-label={`${project.name} 프로젝트 삭제`}
+                  title="프로젝트 삭제"
                   disabled={busy}
                   onClick={() => onDelete(row)}
                 >
-                  삭제
+                  <InterfaceIcon name="trash" />
                 </button>
+              ) : (
+                <span className="project-readonly-space" />
               )}
             </div>
           );

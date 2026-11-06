@@ -3,6 +3,7 @@ import TaskGitHubConnections from "./task-github-connections";
 import ProjectOverview from "./project-overview";
 import TaskDetail from "./task-detail";
 import NavigationIcon from "./navigation-icon";
+import InterfaceIcon from "./interface-icon";
 import { taskGitHubConnections } from "../core/task-github";
 import GitHubPeople from "./github-people";
 import { createId } from "../core/browser-id";
@@ -900,14 +901,16 @@ export default function Dashboard() {
           aria-label="메뉴 닫기"
           onClick={() => setNavigationOpen(false)}
         >
-          ×
+          <InterfaceIcon name="close" />
         </button>
-        <a className="brand" href="/">
-          <span className="brand-icon">C</span>
-          <span>
-            cloud<span className="brand-light">pm</span>
-            <small>TEAM WORKSPACE</small>
-          </span>
+        <a className="brand" href="/" aria-label="솔닥 Cloud PM 홈">
+          <img
+            src="/brand/soldoc-logo.svg"
+            alt="솔닥"
+            width="103"
+            height="21"
+          />
+          <span className="brand-product">Cloud PM</span>
         </a>
         <WorkspaceSwitcher
           enabled={!!data?.viewer.userId && !busy}
@@ -970,16 +973,6 @@ export default function Dashboard() {
             </div>
           ))}
         </nav>
-        <div className="sidebar-note">
-          <span>↗</span>
-          <strong>같은 맥락, 어디서나</strong>
-          <p>
-            MCP로 Claude와 연결해
-            <br />
-            프로젝트를 대화로 관리하세요.
-          </p>
-          <code>/api/mcp</code>
-        </div>
         <button
           className="sidebar-bottom profile-trigger"
           aria-label="개인 프로필 및 토큰 설정"
@@ -1006,7 +999,7 @@ export default function Dashboard() {
         />
       )}
       <main inert={navigationOpen || undefined}>
-        <header>
+        <header className="app-topbar">
           <button
             className="navigation-trigger icon-button"
             aria-label="메뉴 열기"
@@ -1014,10 +1007,12 @@ export default function Dashboard() {
             aria-controls="workspace-navigation"
             onClick={() => setNavigationOpen(true)}
           >
-            ☰
+            <InterfaceIcon name="menu" />
           </button>
           <div className="breadcrumb">
-            워크스페이스 <span>/</span> {tab}
+            <span className="breadcrumb-workspace">팀 워크스페이스</span>
+            <span aria-hidden="true">/</span>
+            <strong>{tab}</strong>
           </div>
           <div className="header-actions">
             {data && (data.viewer.userId || data.mode === "demo") && (
@@ -1030,21 +1025,19 @@ export default function Dashboard() {
                 }}
               />
             )}
-            <span className="live-dot" />
-            프로젝트 관제실
+            <span className="header-product">Cloud PM</span>
             <button
               className="icon-button"
               onClick={() => void load()}
               aria-label="새로고침"
             >
-              ↻
+              <InterfaceIcon name="refresh" />
             </button>
           </div>
         </header>
         <section className={`content${tab === tabs[1] ? " task-page" : ""}`}>
           <div className="page-heading">
             <div>
-              <div className="eyebrow">PROJECT INTELLIGENCE</div>
               <h1>{tab}</h1>
               <p>
                 {tab === tabs[2]
@@ -1059,11 +1052,11 @@ export default function Dashboard() {
             <div className="actions">
               {tab === tabs[0] && (
                 <button
-                  className="button secondary"
+                  className="button"
                   disabled={!canWrite}
                   onClick={() => setModal("project")}
                 >
-                  ＋ 프로젝트 만들기
+                  <InterfaceIcon name="plus" /> 프로젝트 만들기
                 </button>
               )}
               {tab === tabs[0] && (
@@ -1157,7 +1150,7 @@ export default function Dashboard() {
               )}
               {[tabs[0], tabs[1]].includes(tab) && (
                 <button
-                  className="button"
+                  className={tab === tabs[0] ? "button secondary" : "button"}
                   disabled={!canWrite || !projects.length || busy}
                   title={
                     !projects.length
@@ -1496,6 +1489,141 @@ export default function Dashboard() {
                       warm
                     />
                   </div>
+                  <div className="overview-work-lists">
+                    <section
+                      className="overview-attention"
+                      aria-label="확인이 필요한 작업"
+                    >
+                      <div className="section-title">
+                        <h2>
+                          지금 확인이 필요해요 <span>{attention.length}</span>
+                        </h2>
+                        <span className="muted">다음 행동이 필요한 작업</span>
+                      </div>
+                      <div className="attention-list">
+                        {attention.length ? (
+                          attention.slice(0, attentionLimit).map((a) => (
+                            <button
+                              key={a.task}
+                              className="attention-row"
+                              onClick={() =>
+                                openTask(
+                                  tasks.find((t) => t.data.id === a.task)!,
+                                )
+                              }
+                            >
+                              <span className="warning-dot">!</span>
+                              <div>
+                                <strong>{a.title}</strong>
+                                <small>{a.reasons.join(" · ")}</small>
+                              </div>
+                              <code>{a.task}</code>
+                              <span className="arrow">↗</span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="empty small">
+                            확인이 필요한 작업이 없습니다.
+                          </div>
+                        )}
+                      </div>
+                      {attention.length > attentionLimit && (
+                        <button
+                          className="button secondary"
+                          onClick={() => setAttentionLimit(attentionLimit + 5)}
+                        >
+                          확인 필요 태스크 보드에서 전체 보기 (
+                          {Math.min(attentionLimit, attention.length)} /{" "}
+                          {attention.length})
+                        </button>
+                      )}
+                    </section>
+                    <section
+                      className="overview-tasks"
+                      aria-label="최근 태스크"
+                    >
+                      <div className="section-title">
+                        <h2>태스크 진행 현황</h2>
+                        <div className="section-actions">
+                          <button
+                            className="text-button"
+                            disabled={!canWrite}
+                            onClick={() => {
+                              setManagementKind("task");
+                              setTab(tabs[5]);
+                            }}
+                          >
+                            수정·삭제 관리
+                          </button>
+                          <button
+                            className="text-button"
+                            disabled={!canWrite || !projects.length}
+                            onClick={() => {
+                              setEditing(null);
+                              setNewParentId("");
+                              setFormFeature("");
+                              setFormProject(
+                                project || projects[0]?.data.id || "",
+                              );
+                              setNewTaskId(`task-${createId()}`);
+                              setModal("task");
+                            }}
+                          >
+                            ＋ 태스크 추가
+                          </button>
+                        </div>
+                      </div>
+                      <div className="feature-grid overview-task-list">
+                        {tasks.slice(0, overviewLimit).map((task) => (
+                          <article
+                            className="feature-card overview-task-row"
+                            key={task.data.id}
+                          >
+                            <div className="feature-top">
+                              <span className="feature-icon">
+                                <InterfaceIcon name="task" />
+                              </span>
+                              <span className={`badge ${task.data.status}`}>
+                                {labels[task.data.status]}
+                              </span>
+                            </div>
+                            <h3>
+                              <button
+                                className="text-button"
+                                onClick={() => openTask(task)}
+                              >
+                                {task.data.title}
+                              </button>
+                            </h3>
+                            <p>{task.data.description.slice(0, 180)}</p>
+                            <small>
+                              {
+                                projects.find(
+                                  (p) => p.data.id === task.data.project,
+                                )?.data.name
+                              }{" "}
+                              · {task.data.assignee || "미할당"}
+                            </small>
+                          </article>
+                        ))}
+                        {!tasks.length && (
+                          <div className="empty">
+                            프로젝트를 선택하고 태스크를 추가하세요.
+                          </div>
+                        )}
+                      </div>
+                      {tasks.length > overviewLimit && (
+                        <button
+                          className="button secondary"
+                          onClick={() => setTab(tabs[1])}
+                        >
+                          태스크 보드에서 전체 보기 (
+                          {Math.min(overviewLimit, tasks.length)} /{" "}
+                          {tasks.length})
+                        </button>
+                      )}
+                    </section>
+                  </div>
                   <div className="section-title">
                     <span className="muted">원본 상태 기반 브리핑</span>
                     <button
@@ -1512,11 +1640,13 @@ export default function Dashboard() {
                         })
                       }
                     >
-                      ✧ 선택 프로젝트 AI 분석
+                      선택 프로젝트 AI 분석
                     </button>
                   </div>
                   <div className="briefing">
-                    <div className="briefing-icon">✧</div>
+                    <div className="briefing-icon">
+                      <InterfaceIcon name="pulse" />
+                    </div>
                     <div>
                       <div className="section-eyebrow">
                         워크스페이스 브리핑{" "}
@@ -1565,125 +1695,12 @@ export default function Dashboard() {
                       </small>
                     </article>
                   )}
-                  <div className="section-title">
-                    <h2>
-                      지금 확인이 필요해요 <span>{attention.length}</span>
-                    </h2>
-                    <span className="muted">다음 행동이 필요한 작업</span>
-                  </div>
-                  <div className="attention-list">
-                    {attention.length ? (
-                      attention.slice(0, attentionLimit).map((a) => (
-                        <button
-                          key={a.task}
-                          className="attention-row"
-                          onClick={() =>
-                            openTask(tasks.find((t) => t.data.id === a.task)!)
-                          }
-                        >
-                          <span className="warning-dot">!</span>
-                          <div>
-                            <strong>{a.title}</strong>
-                            <small>{a.reasons.join(" · ")}</small>
-                          </div>
-                          <code>{a.task}</code>
-                          <span className="arrow">↗</span>
-                        </button>
-                      ))
-                    ) : (
-                      <div className="empty small">
-                        확인이 필요한 작업이 없습니다.
-                      </div>
-                    )}
-                  </div>
-                  {attention.length > attentionLimit && (
-                    <button
-                      className="button secondary"
-                      onClick={() => setAttentionLimit(attentionLimit + 5)}
-                    >
-                      확인 필요 태스크 보드에서 전체 보기 (
-                      {Math.min(attentionLimit, attention.length)} /{" "}
-                      {attention.length})
-                    </button>
-                  )}
-                  <div className="section-title">
-                    <h2>태스크 진행 현황</h2>
-                    <div className="section-actions">
-                      <button
-                        className="text-button"
-                        disabled={!canWrite}
-                        onClick={() => {
-                          setManagementKind("task");
-                          setTab(tabs[5]);
-                        }}
-                      >
-                        수정·삭제 관리
-                      </button>
-                      <button
-                        className="text-button"
-                        disabled={!canWrite || !projects.length}
-                        onClick={() => {
-                          setEditing(null);
-                          setNewParentId("");
-                          setFormFeature("");
-                          setFormProject(project || projects[0]?.data.id || "");
-                          setNewTaskId(`task-${createId()}`);
-                          setModal("task");
-                        }}
-                      >
-                        ＋ 태스크 추가
-                      </button>
-                    </div>
-                  </div>
-                  <div className="feature-grid">
-                    {tasks.slice(0, overviewLimit).map((task) => (
-                      <article className="feature-card" key={task.data.id}>
-                        <div className="feature-top">
-                          <span className="feature-icon">◇</span>
-                          <span className={`badge ${task.data.status}`}>
-                            {labels[task.data.status]}
-                          </span>
-                        </div>
-                        <h3>
-                          <button
-                            className="text-button"
-                            onClick={() => openTask(task)}
-                          >
-                            {task.data.title}
-                          </button>
-                        </h3>
-                        <p>{task.data.description.slice(0, 180)}</p>
-                        <small>
-                          {
-                            projects.find(
-                              (p) => p.data.id === task.data.project,
-                            )?.data.name
-                          }{" "}
-                          · {task.data.assignee || "미할당"}
-                        </small>
-                      </article>
-                    ))}
-                    {!tasks.length && (
-                      <div className="empty">
-                        프로젝트를 선택하고 태스크를 추가하세요.
-                      </div>
-                    )}
-                  </div>
-                  {tasks.length > overviewLimit && (
-                    <button
-                      className="button secondary"
-                      onClick={() => setTab(tabs[1])}
-                    >
-                      태스크 보드에서 전체 보기 (
-                      {Math.min(overviewLimit, tasks.length)} / {tasks.length})
-                    </button>
-                  )}
                 </>
               )}
               {tab === tabs[1] && (
                 <>
                   <SavedViewsBar
-                    key={data.viewer.workspaceId}
+                    key={`views-${data.viewer.workspaceId}`}
                     api={api}
                     filters={{
                       ...planningFilters,
@@ -1721,7 +1738,7 @@ export default function Dashboard() {
                       }))
                     }
                     githubConnections={taskConnections}
-                    key={data.viewer.workspaceId}
+                    key={`tasks-${data.viewer.workspaceId}`}
                     tasks={tasks}
                     relatedTasks={data.tasks}
                     projects={projects}

@@ -115,6 +115,13 @@ test("태스크 기본 계층·압축 필터·전체 관계 집계·첫 화면·
     await page.locator(".task-filter-menu > summary").click();
     await page.getByRole("button", { name: "계층 보기", exact: true }).click();
     await page.setViewportSize({ width: 390, height: 844 });
+    const planningFilters = page.locator(".saved-view-filters");
+    await expect(page.getByLabel("우선순위 필터")).toBeHidden();
+    await planningFilters.locator("summary").click();
+    await page.getByLabel("우선순위 필터").selectOption("medium");
+    await expect(planningFilters.locator("summary")).toContainText("1개 적용");
+    await page.getByLabel("우선순위 필터").selectOption("");
+    await planningFilters.locator("summary").click();
     const box = await root.boundingBox();
     expect(box!.y).toBeLessThan(500);
     expect(
