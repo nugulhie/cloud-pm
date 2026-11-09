@@ -1,0 +1,16 @@
+[Unit]
+Description=Cloud PM verified database backup
+After=docker.service network-online.target
+Requires=docker.service
+StartLimitIntervalSec=3600
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/cloud-pm-agent
+ExecStart=/bin/sh /opt/cloud-pm-agent/deploy/backup.sh
+TimeoutStartSec=1800
+UMask=0077
+Nice=10
+Restart=on-failure
+RestartSec=300

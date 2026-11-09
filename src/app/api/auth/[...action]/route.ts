@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getStore } from "../../../../db/store";
 import { Users } from "../../../../users/service";
+import { handleOAuth } from "../../../../mcp/oauth";
 import { DomainError } from "../../../../core/model";
 import { assertOrigin } from "../../../../core/auth";
 import { GitHubOAuth, sessionCookie } from "../../../../users/github-oauth";
@@ -23,6 +24,8 @@ export async function POST(
 async function handle(request: Request, action: string) {
   try {
     assertOrigin(request);
+    if (action.startsWith("mcp/oauth/"))
+      return handleOAuth(getStore(), request, action.slice(10));
     const users = new Users(getStore());
     const oauth = new GitHubOAuth(getStore());
     if (request.method === "GET" && action === "github/config")
@@ -42,13 +45,15 @@ async function handle(request: Request, action: string) {
       });
     }
     if (request.method === "GET" && action === "github/callback") {
-      const target = new URL("/", process.env.APP_URL ?? request.url);
+      let target = new URL("/", process.env.APP_URL ?? request.url);
       const headers = new Headers({
         "Cache-Control": "no-store",
         "Referrer-Policy": "no-referrer",
       });
       try {
         const result = await oauth.callback(request);
+        if (result.returnTo)
+          target = new URL(result.returnTo, process.env.APP_URL ?? request.url);
         headers.append(
           "Set-Cookie",
           sessionCookie(result.session.token, request),
@@ -69,6 +74,10 @@ async function handle(request: Request, action: string) {
       headers.set("Location", target.href);
       return new Response(null, { status: 302, headers });
     }
+    if (request.method === "GET" && action === "recovery/options")
+      return Response.json(await users.recoveryOptions(request), {
+        headers: { "Cache-Control": "no-store" },
+      });
     if (request.method === "GET" && action === "mcp/status")
       return Response.json(await users.mcpStatus(request), {
         headers: { "Cache-Control": "no-store" },
@@ -99,6 +108,16 @@ async function handle(request: Request, action: string) {
     if (Buffer.byteLength(text) > 12000)
       throw new DomainError("요청이 너무 큽니다.", 413);
     const body = text ? JSON.parse(text) : {};
+    if (action === "recovery/issue")
+      return Response.json(await users.issueRecovery(request, body), {
+        headers: { "Cache-Control": "no-store" },
+      });
+    if (action === "recovery/reset")
+      return Response.json(await users.recoverPassword(body), {
+        headers: { "Cache-Control": "no-store" },
+      });
+    if (action === "workspace/transfer")
+      return Response.json(await users.transferOwnership(request, body));
     if (action === "github/disconnect-token")
       return Response.json({
         user: await users.disconnectPersonalGitHub(request),

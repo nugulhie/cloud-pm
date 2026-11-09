@@ -1,6 +1,7 @@
 import { isDependencyBlocked } from "../core/dependencies";
 import { registerWorkTools } from "./work-tools";
 import { registerPlanningTools } from "./planning-tools";
+import { registerWorkflowTools } from "./workflow-tools";
 import { knowledgeInput } from "../core/knowledge-model";
 import { knowledgeImpactQuery } from "../core/knowledge-impact";
 import { csvFileInput, csvImportInput } from "../core/requirement-csv";
@@ -24,6 +25,7 @@ export function createMcpServer(service: Service) {
   const server = new McpServer({ name: "cloud-pm-agent", version: "0.1.0" });
   registerWorkTools(server, service);
   registerPlanningTools(server, service);
+  registerWorkflowTools(server, service);
   const read = {
     readOnlyHint: true,
     destructiveHint: false,

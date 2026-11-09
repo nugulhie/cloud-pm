@@ -7,7 +7,8 @@ export type GitHubChange =
   | { version: 1; type: "ci"; sha: string; numbers: number[] }
   | { version: 1; type: "config" }
   | { version: 1; type: "ignore" }
-  | { version: 1; type: "reconcile" };
+  | { version: 1; type: "reconcile"; since?: string; audit?: boolean }
+  | { version: 1; type: "unavailable"; itemId?: string; deleted: boolean };
 
 // 서명 검증 뒤 필요한 필드만 저장한다. 원문·인증 헤더는 보관하지 않는다.
 export function normalizeGitHubChange(
@@ -16,6 +17,20 @@ export function normalizeGitHubChange(
   repository: string,
 ): GitHubChange {
   const body = raw as Record<string, any>;
+  if (body.action === "deleted" && event === "repository")
+    return { version: 1, type: "unavailable", deleted: true };
+  if (
+    body.action === "deleted" &&
+    event === "issues" &&
+    Number.isInteger(body.issue?.number) &&
+    body.issue.number > 0
+  )
+    return {
+      version: 1,
+      type: "unavailable",
+      deleted: true,
+      itemId: `${repository}#${body.issue.number}`,
+    };
   const source = body.pull_request ?? body.issue;
   if (
     source &&

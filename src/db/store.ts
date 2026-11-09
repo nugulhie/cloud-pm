@@ -6,6 +6,8 @@ import { randomUUID } from "node:crypto";
 import { DomainError, type Stored } from "../core/model";
 
 const schema = `CREATE TABLE IF NOT EXISTS records (workspace_id TEXT NOT NULL DEFAULT 'main',kind TEXT NOT NULL, id TEXT NOT NULL, data JSONB NOT NULL, revision INTEGER NOT NULL DEFAULT 1, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY(workspace_id,kind,id));
+CREATE TABLE IF NOT EXISTS record_deletions (id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL,actor TEXT NOT NULL,entries JSONB NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),restored_at TIMESTAMPTZ);
+CREATE INDEX IF NOT EXISTS record_deletions_workspace ON record_deletions(workspace_id,created_at DESC);
 ALTER TABLE records ADD COLUMN IF NOT EXISTS workspace_id TEXT NOT NULL DEFAULT 'main';
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='records'::regclass AND conname='records_pkey' AND array_length(conkey,1)=2) THEN ALTER TABLE records DROP CONSTRAINT records_pkey; ALTER TABLE records ADD PRIMARY KEY(workspace_id,kind,id); END IF; END $$;
 CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, kind TEXT NOT NULL, entity_id TEXT NOT NULL, actor TEXT NOT NULL, data JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
@@ -32,6 +34,7 @@ CREATE TABLE IF NOT EXISTS workspace_settings (id TEXT PRIMARY KEY,owner_id TEXT
 ALTER TABLE workspace_settings ADD COLUMN IF NOT EXISTS invite_only BOOLEAN NOT NULL DEFAULT false;
 CREATE TABLE IF NOT EXISTS workspace_invites (id TEXT PRIMARY KEY,token_hash TEXT UNIQUE NOT NULL,created_by TEXT NOT NULL REFERENCES app_users(id),expected_login TEXT,expires_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',accepted_by TEXT REFERENCES app_users(id),created_at TIMESTAMPTZ NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS app_sessions (token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,expires_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE IF NOT EXISTS password_recoveries (token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,created_by TEXT NOT NULL REFERENCES app_users(id),expires_at TIMESTAMPTZ NOT NULL,used_at TIMESTAMPTZ,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
 ALTER TABLE workspace_settings ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '기본 워크스페이스';
 ALTER TABLE workspace_settings ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
 ALTER TABLE workspace_settings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
@@ -60,7 +63,21 @@ CREATE TABLE IF NOT EXISTS github_oauth_states (
  state_hash TEXT PRIMARY KEY,browser_hash TEXT NOT NULL,verifier_cipher TEXT NOT NULL,
  intent TEXT NOT NULL,link_user_id TEXT REFERENCES app_users(id) ON DELETE CASCADE,
  link_session_hash TEXT,expires_at TIMESTAMPTZ NOT NULL,used_at TIMESTAMPTZ);
-CREATE INDEX IF NOT EXISTS github_oauth_expiry ON github_oauth_states(expires_at);`;
+CREATE INDEX IF NOT EXISTS github_oauth_expiry ON github_oauth_states(expires_at);
+ALTER TABLE github_oauth_states ADD COLUMN IF NOT EXISTS return_path TEXT;
+CREATE TABLE IF NOT EXISTS mcp_oauth_clients(id TEXT PRIMARY KEY,name TEXT NOT NULL,redirect_uris JSONB NOT NULL,secret_hash TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS mcp_oauth_requests(id TEXT PRIMARY KEY,client_id TEXT NOT NULL REFERENCES mcp_oauth_clients(id),redirect_uri TEXT NOT NULL,challenge TEXT NOT NULL,scopes TEXT NOT NULL,state TEXT,resource TEXT NOT NULL,browser_hash TEXT NOT NULL,expires_at TIMESTAMPTZ NOT NULL,used_at TIMESTAMPTZ);
+CREATE TABLE IF NOT EXISTS mcp_oauth_grants(id TEXT PRIMARY KEY,client_id TEXT NOT NULL REFERENCES mcp_oauth_clients(id),user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,workspace_id TEXT NOT NULL REFERENCES workspace_settings(id),role TEXT NOT NULL,resource TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),revoked_at TIMESTAMPTZ,last_used_at TIMESTAMPTZ);
+ALTER TABLE mcp_oauth_grants ADD COLUMN IF NOT EXISTS resource TEXT NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS mcp_oauth_codes(hash TEXT PRIMARY KEY,grant_id TEXT NOT NULL REFERENCES mcp_oauth_grants(id),redirect_uri TEXT NOT NULL,challenge TEXT NOT NULL,expires_at TIMESTAMPTZ NOT NULL,used_at TIMESTAMPTZ);
+CREATE TABLE IF NOT EXISTS mcp_oauth_tokens(access_hash TEXT PRIMARY KEY,refresh_hash TEXT UNIQUE NOT NULL,grant_id TEXT NOT NULL REFERENCES mcp_oauth_grants(id),expires_at TIMESTAMPTZ NOT NULL,refresh_expires_at TIMESTAMPTZ NOT NULL,refresh_used_at TIMESTAMPTZ);
+CREATE INDEX IF NOT EXISTS mcp_oauth_grants_user ON mcp_oauth_grants(user_id,created_at DESC);
+WITH migration AS (INSERT INTO app_migrations(id) VALUES('trash-backfill-v1') ON CONFLICT DO NOTHING RETURNING id), eligible AS (
+ SELECT left(e.id,36) AS batch,r.workspace_id,e.actor,e.created_at,r.kind,r.id,r.revision,r.data-'_deleted' AS data
+ FROM records r JOIN events e ON e.workspace_id=r.workspace_id AND e.kind=r.kind AND e.entity_id=r.id AND (e.data->>'revision')::bigint=r.revision
+ WHERE r.data ? '_deleted' AND e.data->'value' ? '_deleted' AND e.id ~ '^[0-9a-f-]{36}-[0-9]+$' AND EXISTS(SELECT 1 FROM migration)
+) INSERT INTO record_deletions(id,workspace_id,actor,entries,created_at)
+SELECT batch,workspace_id,actor,jsonb_agg(jsonb_build_object('kind',kind,'id',id,'revision',revision,'data',data)),min(created_at) FROM eligible GROUP BY batch,workspace_id,actor ON CONFLICT DO NOTHING;`;
 export class Store {
   public workspaceId = "main";
   forWorkspace(workspaceId: string) {
@@ -171,12 +188,13 @@ export class Store {
     data: T,
     actor: string,
     revision?: number,
+    options?: { restoreDeleted?: boolean },
   ) {
     // 데이터 갱신과 감사 이력은 단일 SQL 문장에서 원자적으로 기록한다.
     const sql =
       revision === undefined
         ? `INSERT INTO records(kind,id,data,workspace_id) VALUES($1,$2,$3::jsonb,$4) ON CONFLICT DO NOTHING RETURNING *`
-        : `UPDATE records SET data=$3::jsonb,revision=revision+1,updated_at=now() WHERE kind=$1 AND id=$2 AND workspace_id=$4 AND revision=$5 RETURNING *`;
+        : `UPDATE records SET data=$3::jsonb,revision=revision+1,updated_at=now() WHERE kind=$1 AND id=$2 AND workspace_id=$4 AND revision=$5 ${options?.restoreDeleted ? "" : "AND NOT(data ? '_deleted')"} RETURNING *`;
     const values: unknown[] = [
       kind,
       id,
@@ -205,20 +223,23 @@ export class Store {
     targets: { kind: string; id: string; revision: number }[],
     actor: string,
   ) {
+    const batchId = randomUUID();
     const rows = await this.query<{ count: number }>(
       `
       WITH targets AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS x(kind text,id text,revision int)),
       locked AS MATERIALIZED (SELECT r.* FROM records r JOIN targets t ON r.kind=t.kind AND r.id=t.id AND r.revision=t.revision WHERE r.workspace_id=$4 AND NOT (r.data ? '_deleted') FOR UPDATE OF r),
       changed AS (UPDATE records r SET data=r.data || '{"_deleted":true}'::jsonb,revision=r.revision+1,updated_at=now() FROM locked l WHERE r.kind=l.kind AND r.id=l.id AND r.workspace_id=l.workspace_id AND (SELECT count(*) FROM locked)=(SELECT count(*) FROM targets) RETURNING r.*),
-      logged AS (INSERT INTO events(id,kind,entity_id,actor,workspace_id,data) SELECT $3 || '-' || row_number() OVER(),kind,id,$2,workspace_id,jsonb_build_object('revision',revision,'value',data) FROM changed)
+      logged AS (INSERT INTO events(id,kind,entity_id,actor,workspace_id,data) SELECT $3 || '-' || row_number() OVER(),kind,id,$2,workspace_id,jsonb_build_object('revision',revision,'value',data) FROM changed),
+      archived AS (INSERT INTO record_deletions(id,workspace_id,actor,entries) SELECT $3,$4,$2,jsonb_agg(jsonb_build_object('kind',kind,'id',id,'revision',revision+1,'data',data)) FROM locked HAVING count(*)=(SELECT count(*) FROM targets) AND count(*)>0)
       SELECT count(*)::int AS count FROM changed`,
-      [JSON.stringify(targets), actor, randomUUID(), this.workspaceId],
+      [JSON.stringify(targets), actor, batchId, this.workspaceId],
     );
     if (rows[0]?.count !== targets.length)
       throw new DomainError(
         "다른 요청이 변경했습니다. 새로고침 후 다시 시도하세요.",
         409,
       );
+    return { batchId };
   }
   async history(limit = 100) {
     return this.query(

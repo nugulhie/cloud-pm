@@ -11,6 +11,11 @@ import {
 import { Collaboration, type TaskComment } from "./collaboration";
 import { Workspaces } from "../workspaces/service";
 import { Planning } from "./planning";
+import { captureDocumentChange } from "./change-reviews";
+import { Trash } from "./trash";
+import { Workflow } from "./workflow";
+import { taskWorkAlerts } from "./work-alerts";
+import { operationStatus } from "../operations/status";
 import { changeIssueAssignees } from "./issue-assignees";
 import { knowledgeInput, type KnowledgeEntry } from "./knowledge-model";
 import { knowledgeImpact, knowledgeImpactQuery } from "./knowledge-impact";
@@ -65,6 +70,79 @@ type TaskWriteContext = {
   authorizedProjects: Set<string>;
 };
 export class Service {
+  async operations() {
+    return operationStatus(this.store, this.actor);
+  }
+  private workflow() {
+    return new Workflow(
+      this.store,
+      this.actor,
+      () => this.workflowSnapshot(),
+      (task, revision) => this.saveTaskUnlocked(task, revision),
+    );
+  }
+  private async workflowSnapshot() {
+    const allowed = this.actor.repositories?.map((r) => r.toLowerCase());
+    const projects = (await this.store.list<Project>("project")).filter(
+        (p) =>
+          !allowed ||
+          p.data.repositories.every((r) => allowed.includes(r.toLowerCase())),
+      ),
+      ids = new Set(projects.map((p) => p.data.id));
+    return {
+      projects,
+      tasks: (await this.store.list<Task>("task")).filter((t) =>
+        ids.has(t.data.project),
+      ),
+      requirements: (await this.store.list<Requirement>("requirement")).filter(
+        (r) => ids.has(r.data.project),
+      ),
+      knowledge: await this.store.list<KnowledgeEntry>("knowledge"),
+    };
+  }
+  async readWorkflow(operation: string, input: unknown = {}) {
+    return this.workflow().read(operation, input);
+  }
+  async writeWorkflow(operation: string, input: unknown) {
+    if (operation === "schedule/preview")
+      return this.workflow().previewSchedule(input);
+    requireWrite(this.actor);
+    return this.withTaskGraph((service) =>
+      service.workflow().write(operation, input),
+    );
+  }
+  async listTrash(input: unknown = {}) {
+    return new Trash(this.store, this.actor).list(input);
+  }
+  async restoreTrash(input: unknown) {
+    requireWrite(this.actor);
+    return this.withTaskGraph(async (service) =>
+      new Trash(service.store, service.actor).restore(
+        input,
+        async (entry, revision) => {
+          if (entry.kind === "project")
+            return service.saveProjectUnlocked(entry.data, revision);
+          if (entry.kind === "feature")
+            return service.saveFeatureUnlocked(entry.data, revision);
+          if (entry.kind === "task")
+            return service.saveTaskUnlocked(entry.data, revision);
+          if (entry.kind === "requirement")
+            return service
+              .requirements()
+              .save(inputFields(requirementInput, entry.data), revision);
+          if (entry.kind === "knowledge")
+            return service.saveKnowledge(
+              inputFields(knowledgeInput, entry.data),
+              revision,
+            );
+          if (entry.kind === "milestone" || entry.kind === "release")
+            return service
+              .workflow()
+              .validateRestoredPlan(entry.kind, entry.data);
+        },
+      ),
+    );
+  }
   private planningService?: Planning;
   constructor(
     public store: Store,
@@ -192,7 +270,7 @@ export class Service {
           "동일한 용어가 있습니다. 기존 항목을 편집하세요.",
           409,
         );
-      return service.store.save(
+      const saved = await service.store.save(
         "knowledge",
         value.id,
         {
@@ -208,6 +286,14 @@ export class Service {
         this.actor.name,
         revision,
       );
+      await captureDocumentChange(
+        service.store,
+        service.actor,
+        "knowledge",
+        old,
+        saved,
+      );
+      return saved;
     });
   }
   async getKnowledgeImpact(input: unknown) {
@@ -350,7 +436,7 @@ export class Service {
     return new Collaboration(
       this.store,
       this.actor,
-      async () => (await this.dashboard()).tasks,
+      async () => (await this.workflowSnapshot()).tasks,
     );
   }
   async listComments(task: string) {
@@ -925,6 +1011,7 @@ export class Service {
       this.actor.name,
       revision,
     );
+    if (saved) await taskWorkAlerts(this.store, this.actor, previous, saved);
     if (saved && context) {
       const position = context.positions.get(t.id);
       if (position === undefined) {
@@ -1037,7 +1124,7 @@ export class Service {
       kind,
       ids,
       ...deletionImpact(data, kind, ids),
-      reversible: false,
+      reversible: true,
       githubOriginalsChanged: false,
     };
   }
@@ -1144,6 +1231,22 @@ export class Service {
       throw new DomainError(
         "다른 태스크가 선행 작업으로 참조 중입니다. 의존관계를 해제하거나 관련 작업을 함께 선택해 삭제하세요.",
       );
+    if (kind !== "project") {
+      for (const scheduledKind of ["milestone", "release"]) {
+        const scheduled = await this.store.list<{ taskIds: string[] }>(
+          scheduledKind,
+        );
+        if (
+          scheduled.some((r) =>
+            r.data.taskIds.some((id) => taskIds.includes(id)),
+          )
+        )
+          throw new DomainError(
+            "마일스톤·릴리스가 참조 중인 태스크입니다. 계획에서 연결을 해제한 뒤 삭제하세요.",
+            409,
+          );
+      }
+    }
     if (
       dashboard.requirementIssues.some(
         (r) =>
@@ -1200,7 +1303,16 @@ export class Service {
         .map((l) => ({ kind: "link", id: l.data.id, revision: l.revision })),
     ];
     if (kind === "project")
-      for (const childKind of ["sprint", "backlog-order", "saved-view"]) {
+      for (const childKind of [
+        "sprint",
+        "backlog-order",
+        "saved-view",
+        "milestone",
+        "release",
+        "task-review",
+        "change-review",
+        "change-target",
+      ]) {
         const children = await this.store.list<{
           id: string;
           project?: string;

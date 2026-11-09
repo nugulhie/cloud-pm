@@ -1,0 +1,8 @@
+simulation: github-maintenance
+routing: path
+mocks:
+  - name: github-maintenance
+    routeKey: github
+    origin:
+      - api.github.com
+    path: postman/mocks/github-maintenance

@@ -23,6 +23,25 @@ async function handle(request: Request, { path }: { path: string[] }) {
     const service = await serviceFor(request);
     const route = path.join("/");
     if (request.method === "GET") {
+      if (route === "operations")
+        return NextResponse.json(await service.operations(), {
+          headers: { "Cache-Control": "no-store" },
+        });
+      if (route.startsWith("workflow/"))
+        return NextResponse.json(
+          await service.readWorkflow(
+            route.slice(9),
+            Object.fromEntries(new URL(request.url).searchParams),
+          ),
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      if (route === "trash")
+        return NextResponse.json(
+          await service.listTrash(
+            Object.fromEntries(new URL(request.url).searchParams),
+          ),
+          { headers: { "Cache-Control": "no-store" } },
+        );
       if (route.startsWith("planning/"))
         return NextResponse.json(
           await service.readPlanning(
@@ -90,6 +109,13 @@ async function handle(request: Request, { path }: { path: string[] }) {
       )
         throw new DomainError("요청이 너무 큽니다.", 413);
       const body = text ? JSON.parse(text) : {};
+      if (route.startsWith("workflow/"))
+        return NextResponse.json(
+          await service.writeWorkflow(route.slice(9), body),
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      if (route === "trash/restore")
+        return NextResponse.json(await service.restoreTrash(body));
       if (route === "github/issue-assignees")
         return NextResponse.json(await service.updateIssueAssignees(body));
       if (route === "planning/tasks/query")

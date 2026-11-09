@@ -1,4 +1,5 @@
 "use client";
+import { draftSaved } from "./draft-boundary";
 import { createId } from "../core/browser-id";
 import EditorDialog from "./editor-dialog";
 import RequirementCsvImport from "./requirement-csv-import";
@@ -151,7 +152,8 @@ export default function RequirementsPanel({
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const draftForm = event.currentTarget;
+    const form = new FormData(draftForm);
     await run(async () => {
       await api("requirements", {
         revision: editing?.revision,
@@ -168,6 +170,7 @@ export default function RequirementsPanel({
           assignee: String(form.get("assignee")),
         },
       });
+      draftSaved(draftForm);
       setEditing(undefined);
       setNotice("PRD 항목을 저장했습니다.");
     });
@@ -562,6 +565,12 @@ export default function RequirementsPanel({
       </p>
       {editing !== undefined && (
         <EditorDialog
+          draftKey={`requirement:${editing?.data.id ?? "new"}`}
+          revision={editing?.revision}
+          onDraftRestore={(values) => {
+            if (values["@PRD 프로젝트"]?.[0])
+              setFormProject(values["@PRD 프로젝트"][0]);
+          }}
           title={editing ? "PRD 항목 편집" : "PRD 작성"}
           busy={busy}
           onClose={close}
@@ -685,6 +694,7 @@ export default function RequirementsPanel({
                 type="button"
                 className="button secondary"
                 disabled={busy}
+                data-draft-close
                 onClick={close}
               >
                 닫기

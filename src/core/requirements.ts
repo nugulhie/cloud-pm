@@ -1,3 +1,4 @@
+import { captureDocumentChange } from "./change-reviews";
 import {
   type Actor,
   type Task,
@@ -137,6 +138,13 @@ export class Requirements {
       },
       this.actor.name,
       revision,
+    );
+    await captureDocumentChange(
+      this.store,
+      this.actor,
+      "requirement",
+      old,
+      result,
     );
     if (!old)
       await this.store.save(

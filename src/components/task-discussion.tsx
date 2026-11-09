@@ -76,7 +76,11 @@ export default function TaskDiscussion({
     });
   }
   return (
-    <section className="task-discussion" aria-label="태스크 댓글">
+    <section
+      className="task-discussion"
+      data-draft-ignore
+      aria-label="태스크 댓글"
+    >
       <div className="discussion-heading">
         <h3>댓글 {thread ? `(${thread.comments.length})` : ""}</h3>
         <button

@@ -1,6 +1,7 @@
 # Existing ALB -> host nginx -> loopback app; no public DB/app ports.
 x-environment: &environment
   NODE_ENV: production
+  OPERATIONS_STATUS_DIR: /run/cloud-pm-ops
   APP_URL: https://${DOMAIN:?Set DOMAIN}
   DATABASE_URL: postgresql://cloudpm:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/cloud_pm
   TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY}
@@ -59,6 +60,8 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     mem_limit: 320m
+    volumes:
+      - /var/lib/cloud-pm-ops:/run/cloud-pm-ops:ro
     depends_on:
       db:
         condition: service_healthy
@@ -70,6 +73,8 @@ services:
       <<: *environment
       NODE_OPTIONS: --max-old-space-size=128
     mem_limit: 192m
+    volumes:
+      - /var/lib/cloud-pm-ops:/run/cloud-pm-ops:ro
     depends_on:
       app:
         condition: service_healthy

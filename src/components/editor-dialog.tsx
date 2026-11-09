@@ -1,15 +1,22 @@
 "use client";
 import { useEffect, useRef, type ReactNode } from "react";
+import DraftBoundary from "./draft-boundary";
 export default function EditorDialog({
   title,
   busy,
   onClose,
   children,
+  draftKey,
+  revision,
+  onDraftRestore,
 }: {
   title: string;
   busy: boolean;
   onClose: () => void;
   children: ReactNode;
+  draftKey?: string;
+  revision?: number;
+  onDraftRestore?: (values: Record<string, string[]>) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -22,6 +29,24 @@ export default function EditorDialog({
       ?.focus();
     return () => element?.close();
   }, []);
+  const content = (
+    <>
+      <div className="section-title">
+        <h2>{title}</h2>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="닫기"
+          data-draft-close
+          disabled={busy}
+          onClick={onClose}
+        >
+          ×
+        </button>
+      </div>
+      {children}
+    </>
+  );
   return (
     <dialog
       ref={ref}
@@ -32,19 +57,19 @@ export default function EditorDialog({
         if (!busy) onClose();
       }}
     >
-      <div className="section-title">
-        <h2>{title}</h2>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="닫기"
-          disabled={busy}
-          onClick={onClose}
+      {draftKey ? (
+        <DraftBoundary
+          key={draftKey}
+          id={draftKey}
+          revision={revision}
+          onClose={onClose}
+          onRestore={onDraftRestore}
         >
-          ×
-        </button>
-      </div>
-      {children}
+          {content}
+        </DraftBoundary>
+      ) : (
+        content
+      )}
     </dialog>
   );
 }

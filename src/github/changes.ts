@@ -1,3 +1,4 @@
+import { taskWorkAlerts } from "../core/work-alerts";
 import { acquireSyncLease } from "../jobs/lease";
 import { randomUUID } from "node:crypto";
 import { Store } from "../db/store";
@@ -14,6 +15,11 @@ import {
 } from "./items";
 import { evaluateTask, type PullRequestSnapshot } from "../completion/index";
 import { GitHubRateLimitError } from "./rate-limit";
+import {
+  auditRepository,
+  recordSourceAvailability,
+  type Checkpoint,
+} from "../operations/sync-maintenance";
 
 type CompletionIndex = Awaited<ReturnType<GitHubClient["loadTasks"]>>;
 const actor = "webhook-worker";
@@ -72,18 +78,70 @@ export class GitHubChanges {
       repositories: 1,
     };
     const change = job.payload;
+    if (change?.type === "unavailable") {
+      await recordSourceAvailability(
+        this.store,
+        job.repository,
+        change.deleted ? "deleted" : "unavailable",
+        change.itemId,
+      );
+      run.finishedAt = new Date().toISOString();
+      return run;
+    }
     if (!change || change.type === "reconcile") {
       const rows = await this.store.query<{ since: string }>(
         `SELECT min(created_at) AS since FROM sync_jobs WHERE repository=$1 AND payload IS NULL AND status IN ('pending','running')`,
         [job.repository],
       );
-      const since = new Date(
-        new Date(rows[0]?.since ?? job.created_at).getTime() - 60000,
-      ).toISOString();
+      const since =
+        change?.type === "reconcile" && change.since
+          ? new Date(change.since).toISOString()
+          : new Date(
+              new Date(rows[0]?.since ?? job.created_at).getTime() - 60000,
+            ).toISOString();
       // 구버전 큐 복구: 변경분만 조회하며 열린 항목 전체 조회도 하지 않는다.
-      const changed = await this.client.paginate(
-        `/repos/${job.repository}/issues?state=all&since=${encodeURIComponent(since)}`,
-      );
+      let changed: unknown[];
+      try {
+        changed = await this.client.paginate(
+          `/repos/${job.repository}/issues?state=all&sort=updated&direction=asc&since=${encodeURIComponent(since)}`,
+        );
+      } catch (error) {
+        if (
+          change?.type === "reconcile" &&
+          change.audit &&
+          error instanceof GitHubError &&
+          [403, 404].includes(error.status)
+        ) {
+          await recordSourceAvailability(
+            this.store,
+            job.repository,
+            "unavailable",
+          );
+          const cache = this.store.forWorkspace("main"),
+            previous = await cache.get<Checkpoint>(
+              "sync-checkpoint",
+              job.repository,
+            );
+          await cache.upsert(
+            "sync-checkpoint",
+            job.repository,
+            {
+              ...previous?.data,
+              id: job.repository,
+              repository: job.repository,
+              availability: "unavailable",
+              checkedAt: new Date().toISOString(),
+            },
+            actor,
+          );
+          run.warnings!.push(
+            `${job.repository}: 삭제 또는 권한 변경으로 원본을 확인할 수 없습니다.`,
+          );
+          run.finishedAt = new Date().toISOString();
+          return run;
+        }
+        throw error;
+      }
       for (const raw of changed) {
         const incoming = parseGitHubItem(raw, job.repository);
         if (incoming.kind === "pr") {
@@ -96,6 +154,35 @@ export class GitHubChanges {
           await this.updateItem(incoming, pr.changed_files);
         } else await this.updateItem(incoming);
       }
+      if (change?.type === "reconcile" && change.audit) {
+        const available = await auditRepository(
+          this.store,
+          this.client,
+          job.repository,
+          (item, changed) => this.updateItem(item, changed, true),
+        );
+        if (!available) {
+          run.warnings!.push(`${job.repository}: 원본 접근 상태를 확인하세요.`);
+          run.finishedAt = new Date().toISOString();
+          return run;
+        }
+      }
+      const cache = this.store.forWorkspace("main"),
+        checkpoint = await cache.get<Checkpoint>(
+          "sync-checkpoint",
+          job.repository,
+        );
+      await cache.upsert(
+        "sync-checkpoint",
+        job.repository,
+        {
+          ...checkpoint?.data,
+          id: job.repository,
+          repository: job.repository,
+          lastSuccessAt: run.startedAt,
+        },
+        actor,
+      );
       await this.evaluate();
     } else if (change.type === "item") {
       await this.updateItem(change.item, change.changedFiles);
@@ -188,13 +275,23 @@ export class GitHubChanges {
   private async updateItem(
     incoming: GitHubItem,
     changedFiles?: number,
+    verified = false,
   ): Promise<void> {
     const old = (await this.store.get<GitHubItem>("github", incoming.id))?.data;
     if (old && Date.parse(old.updatedAt) > Date.parse(incoming.updatedAt))
       return;
+    if (
+      old?.sourceAvailability &&
+      old.sourceAvailability !== "available" &&
+      !verified &&
+      Date.parse(old.updatedAt) >= Date.parse(incoming.updatedAt)
+    )
+      return;
     const record: GitHubItem = {
       ...old,
       ...incoming,
+      sourceAvailability: "available",
+      sourceCheckedAt: new Date().toISOString(),
       files: old?.files,
       filesComplete: old?.filesComplete,
       filesHeadSha: old?.filesHeadSha,
@@ -355,14 +452,22 @@ export class GitHubChanges {
           if (
             result.state === "satisfied" &&
             !["canceled", "done"].includes(task.data.status)
-          )
-            await scoped.save(
+          ) {
+            const saved = await scoped.save<Task>(
               "task",
               d.task,
               { ...task.data, status: "done" },
               actor,
               task.revision,
             );
+            if (saved)
+              await taskWorkAlerts(
+                scoped,
+                { name: actor, role: "write" },
+                task,
+                saved,
+              );
+          }
         }
     }
   }

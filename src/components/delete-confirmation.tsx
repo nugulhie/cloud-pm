@@ -46,8 +46,8 @@ export default function DeleteConfirmation({
     >
       <h2 id={titleId}>선택한 {names.length}개 항목을 삭제할까요?</h2>
       <p id={descriptionId}>
-        삭제 후 화면에서 복구할 수 없습니다. 선택한 항목과 하위 작업·댓글·연결이
-        함께 삭제됩니다. GitHub의 PR·이슈 원본은 유지됩니다.
+        삭제한 항목은 휴지통에서 복구할 수 있습니다. 선택한 항목과 하위
+        작업·댓글·연결이 함께 삭제됩니다. GitHub의 PR·이슈 원본은 유지됩니다.
       </p>
       {impact && (
         <div className="deletion-impact">

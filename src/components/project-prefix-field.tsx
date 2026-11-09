@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useDraftRestore } from "./draft-boundary";
 import { createId } from "../core/browser-id";
 import { suggestProjectPrefix } from "../core/project-prefix";
 export default function ProjectPrefixField({
@@ -14,6 +15,9 @@ export default function ProjectPrefixField({
   used?: string[];
 }) {
   const [manual, setManual] = useState(defaultValue);
+  useDraftRestore("project-prefix", (values) => {
+    if (values.featurePrefix?.[0]) setManual(values.featurePrefix[0]);
+  });
   const value = manual ?? suggestProjectPrefix(projectName, seed, used);
   return (
     <div className="project-prefix-field">

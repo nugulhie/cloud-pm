@@ -7,7 +7,7 @@ export default function NotificationInbox({
   onOpen,
 }: {
   api: (path: string, body?: unknown) => Promise<any>;
-  onOpen: (task: string) => void;
+  onOpen: (task: string, destination?: string) => void;
 }) {
   const request = useRef(api);
   request.current = api;
@@ -91,7 +91,7 @@ export default function NotificationInbox({
           </button>
         </div>
         <p className="section-description">
-          현재 워크스페이스의 댓글·멘션 알림입니다. 30초마다 갱신합니다.
+          현재 워크스페이스의 댓글·멘션·업무 알림입니다. 30초마다 갱신합니다.
         </p>
         <div className="comment-actions">
           <button
@@ -144,7 +144,7 @@ export default function NotificationInbox({
                     });
                     if (active.current) {
                       setOpen(false);
-                      onOpen(n.task);
+                      onOpen(n.task, n.destination);
                     }
                   })
                 }
@@ -152,9 +152,7 @@ export default function NotificationInbox({
                 <strong>
                   {!n.read && <span className="live-dot" />} {n.title}
                 </strong>
-                <span>
-                  @{n.author} · {n.task}
-                </span>
+                <span>{n.author}</span>
                 <p>{n.body.slice(0, 160)}</p>
                 <time dateTime={n.updatedAt}>
                   {new Date(n.updatedAt).toLocaleString("ko-KR")}

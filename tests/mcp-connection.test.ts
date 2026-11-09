@@ -130,7 +130,7 @@ test("실제 HTTP MCP 인증·SDK 점검·접속 기록·토큰 회전과 상태
     assert.equal(unauth.status, 401);
     assert.equal(
       unauth.headers.get("WWW-Authenticate"),
-      'Bearer realm="cloud-pm-agent"',
+      'Bearer realm="cloud-pm-agent", resource_metadata="http://localhost/.well-known/oauth-protected-resource/api/mcp"',
     );
     assert.equal(unauth.headers.get("Cache-Control"), "no-store");
     const fetcher: typeof fetch = async (input, init) => {

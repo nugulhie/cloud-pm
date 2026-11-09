@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Store } from "../db/store";
+import type { WorkAlert } from "./work-alerts";
 import { demoMode, requireWrite } from "./auth";
 import {
   DomainError,
@@ -191,20 +192,67 @@ export class Collaboration {
         )
       ).map((r) => [r.data.id, r.data.seenRevision]),
     );
-    const notifications = (await this.store.list<TaskComment>("comment"))
+    const visible = [...tasks.keys()];
+    const comments = (
+      await this.store.query<{
+        data: TaskComment;
+        revision: number;
+        updated_at: string;
+      }>(
+        "SELECT data,revision,updated_at FROM records WHERE workspace_id=$1 AND kind='comment' AND NOT(data ? '_deleted') AND data->'recipients' @> $2::jsonb AND data->>'task'=ANY($3::text[]) ORDER BY updated_at DESC LIMIT 200",
+        [this.store.workspaceId, JSON.stringify([userId]), visible],
+      )
+    ).map((r) => ({ ...r, updatedAt: new Date(r.updated_at).toISOString() }));
+    const alerts = (
+      await this.store.query<{
+        data: WorkAlert;
+        revision: number;
+        updated_at: string;
+      }>(
+        "SELECT data,revision,updated_at FROM records WHERE workspace_id=$1 AND kind='work-alert' AND NOT(data ? '_deleted') AND data->'recipients' @> $2::jsonb AND (data->>'task'='' OR data->>'task'=ANY($3::text[])) ORDER BY updated_at DESC LIMIT 200",
+        [this.store.workspaceId, JSON.stringify([userId]), visible],
+      )
+    ).map((r) => ({ ...r, updatedAt: new Date(r.updated_at).toISOString() }));
+    const notifications = comments
       .filter(
         (r) => r.data.recipients.includes(userId) && tasks.has(r.data.task),
       )
       .map((r) => ({
+        destination: undefined as WorkAlert["destination"],
         id: r.data.id,
         revision: r.revision,
         task: r.data.task,
         title: tasks.get(r.data.task)!.title,
         author: r.data.author,
-        body: r.data.body,
+        body: r.data.body.slice(0, 800),
         updatedAt: r.updatedAt,
         read: (reads.get(this.readId(r.data.id)) ?? 0) >= r.revision,
       }))
+      .concat(
+        alerts
+          .filter(
+            (r) =>
+              r.data.recipients.includes(userId) &&
+              (!r.data.task || tasks.has(r.data.task)),
+          )
+          .map((r) => ({
+            destination:
+              r.data.destination ??
+              (r.data.kind === "weekly"
+                ? "summary-week"
+                : r.data.kind === "daily"
+                  ? "summary-day"
+                  : undefined),
+            id: r.data.id,
+            revision: r.revision,
+            task: r.data.task,
+            title: r.data.task ? tasks.get(r.data.task)!.title : r.data.title,
+            author: r.data.author,
+            body: r.data.body,
+            updatedAt: r.updatedAt,
+            read: (reads.get(this.readId(r.data.id)) ?? 0) >= r.revision,
+          })),
+      )
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     return {
       notifications,

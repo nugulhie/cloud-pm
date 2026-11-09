@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useDraftRestore } from "./draft-boundary";
 import { taskDependencyInfo } from "../core/dependencies";
 import type { Stored, Task } from "../core/model";
 const labels = {
@@ -23,6 +24,9 @@ export default function TaskDependencies({
 }) {
   const [selected, setSelected] = useState(initial),
     [search, setSearch] = useState("");
+  useDraftRestore("task-dependencies", (values) =>
+    setSelected(values.dependsOn ?? []),
+  );
   const candidates = tasks.filter(
     (row) => row.data.id !== task.id && row.data.project === task.project,
   );

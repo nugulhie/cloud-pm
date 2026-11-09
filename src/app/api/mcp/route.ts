@@ -2,6 +2,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { serviceFor } from "../../../core/runtime";
 import { createMcpServer } from "../../../mcp/server";
 import { DomainError } from "../../../core/model";
+import { mcpOrigin } from "../../../mcp/oauth-access";
 import {
   McpBodyError,
   readMcpBody,
@@ -9,6 +10,13 @@ import {
 } from "../../../mcp/connection";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+function authenticationChallenge() {
+  try {
+    return `Bearer realm="cloud-pm-agent", resource_metadata="${mcpOrigin()}/.well-known/oauth-protected-resource/api/mcp"`;
+  } catch {
+    return 'Bearer realm="cloud-pm-agent"';
+  }
+}
 export async function POST(request: Request) {
   try {
     const service = await serviceFor(request);
@@ -33,6 +41,7 @@ export async function POST(request: Request) {
         ).catch(() => {});
       }
       response.headers.set("Cache-Control", "no-store");
+      response.headers.set("Access-Control-Allow-Origin", "*");
       return response;
     } finally {
       await transport.close();
@@ -55,7 +64,9 @@ export async function POST(request: Request) {
         headers: {
           "Cache-Control": "no-store",
           ...(status === 401
-            ? { "WWW-Authenticate": 'Bearer realm="cloud-pm-agent"' }
+            ? {
+                "WWW-Authenticate": authenticationChallenge(),
+              }
             : {}),
         },
       },
@@ -66,6 +77,19 @@ export async function GET() {
   return new Response(null, {
     status: 405,
     headers: { Allow: "POST", "Cache-Control": "no-store" },
+  });
+}
+export function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST,GET,DELETE,OPTIONS",
+      "Access-Control-Allow-Headers":
+        "Authorization,Content-Type,MCP-Protocol-Version,MCP-Session-Id,X-Workspace-Id",
+      "Access-Control-Expose-Headers": "WWW-Authenticate",
+      "Cache-Control": "no-store",
+    },
   });
 }
 export async function DELETE() {

@@ -1,0 +1,10 @@
+[Unit]
+Description=Cloud PM operational health every minute
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+Unit=cloud-pm-health.service
+
+[Install]
+WantedBy=timers.target

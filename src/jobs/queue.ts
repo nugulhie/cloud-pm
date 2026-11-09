@@ -47,7 +47,7 @@ export class SyncQueue {
       `UPDATE sync_jobs SET status='failed',last_error='작업 임대가 만료되어 최대 시도 횟수에 도달했습니다.',lease_token=NULL,lease_expires_at=NULL,updated_at=now() WHERE status='running' AND lease_expires_at<now() AND attempts>=5`,
     );
     const rows = await this.store.query<SyncJob>(
-      `WITH next_job AS (SELECT id FROM sync_jobs WHERE attempts<5 AND ((status='pending' AND available_at<=now()) OR (status='running' AND lease_expires_at<now())) ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE sync_jobs SET status='running',attempts=attempts+1,lease_token=$1,lease_expires_at=now()+interval '90 seconds',updated_at=now() FROM next_job WHERE sync_jobs.id=next_job.id RETURNING sync_jobs.*, (SELECT max(sequence) FROM sync_jobs) AS batch_cutoff`,
+      `WITH next_job AS (SELECT id FROM sync_jobs WHERE attempts<5 AND ((status='pending' AND available_at<=now()) OR (status='running' AND lease_expires_at<now())) ORDER BY CASE WHEN event='scheduled_reconcile' THEN 1 ELSE 0 END,created_at,id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE sync_jobs SET status='running',attempts=attempts+1,lease_token=$1,lease_expires_at=now()+interval '90 seconds',updated_at=now() FROM next_job WHERE sync_jobs.id=next_job.id RETURNING sync_jobs.*, (SELECT max(sequence) FROM sync_jobs) AS batch_cutoff`,
       [randomUUID()],
     );
     return rows[0];

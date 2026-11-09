@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useDraftRestore } from "./draft-boundary";
 import type { Stored } from "../core/model";
 import type { Sprint } from "../core/planning-model";
 export default function TaskSprintSelect({
@@ -13,6 +14,10 @@ export default function TaskSprintSelect({
 }) {
   const [sprints, setSprints] = useState<Stored<Sprint>[]>([]),
     [error, setError] = useState("");
+  const [selection, setSelection] = useState(value ?? "");
+  useDraftRestore("task-sprint", (values) =>
+    setSelection(values.sprintId?.[0] ?? ""),
+  );
   const apiRef = useRef(api);
   apiRef.current = api;
   useEffect(() => {
@@ -32,10 +37,15 @@ export default function TaskSprintSelect({
   return (
     <label>
       스프린트
-      <select name="sprintId" aria-label="스프린트" defaultValue={value ?? ""}>
+      <select
+        name="sprintId"
+        aria-label="스프린트"
+        value={selection}
+        onChange={(e) => setSelection(e.target.value)}
+      >
         <option value="">백로그 · 미배정</option>
-        {value && !sprints.some((s) => s.data.id === value) && (
-          <option value={value}>기존 스프린트</option>
+        {selection && !sprints.some((s) => s.data.id === selection) && (
+          <option value={selection}>기존 스프린트</option>
         )}
         {sprints
           .filter((s) => s.data.status !== "closed" || s.data.id === value)

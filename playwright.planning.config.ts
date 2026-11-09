@@ -9,7 +9,7 @@ const directory = process.env.PLANNING_E2E_DIR,
   url = "http://127.0.0.1:3105";
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "team-planning.spec.ts",
+  testMatch: ["team-planning.spec.ts", "improvements.spec.ts"],
   globalSetup: "./tests/helpers/planning-browser.ts",
   outputDir: join(directory, "results"),
   workers: 1,

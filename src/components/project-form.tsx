@@ -1,5 +1,6 @@
 "use client";
 import { createId } from "../core/browser-id";
+import { useDraftRestore } from "./draft-boundary";
 import { useState, type FormEvent } from "react";
 import type { Project } from "../core/model";
 import ProjectPrefixField from "./project-prefix-field";
@@ -24,6 +25,13 @@ export default function ProjectForm({
     [selected, setSelected] = useState<string[]>([]),
     [error, setError] = useState("");
   const choices = [...new Set(repositories.map((r) => r.toLowerCase()))].sort();
+  useDraftRestore("project-form", (values) => {
+    setName(values.name?.[0] ?? "");
+    if (values.id?.[0]) setIdentifier(values.id[0]);
+    setSelected(
+      (values.draftRepositories ?? []).filter((r) => choices.includes(r)),
+    );
+  });
   const visible = choices.filter((r) => r.includes(query.toLowerCase()));
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -113,15 +121,16 @@ export default function ProjectForm({
           {visible.map((r) => (
             <label key={r}>
               <input
+                name="draftRepositories"
+                value={r}
                 type="checkbox"
                 checked={selected.includes(r)}
-                onChange={(e) =>
-                  setSelected(
-                    e.target.checked
-                      ? [...selected, r]
-                      : selected.filter((v) => v !== r),
-                  )
-                }
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setSelected((current) =>
+                    checked ? [...current, r] : current.filter((v) => v !== r),
+                  );
+                }}
               />
               <span>{r}</span>
             </label>
@@ -160,6 +169,7 @@ export default function ProjectForm({
           type="button"
           className="button secondary"
           disabled={busy}
+          data-draft-close
           onClick={onCancel}
         >
           취소

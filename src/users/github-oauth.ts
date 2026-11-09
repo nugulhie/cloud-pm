@@ -65,6 +65,20 @@ export class GitHubOAuth {
       .enum(["signin", "link"])
       .default("signin")
       .parse(new URL(request.url).searchParams.get("intent") ?? undefined);
+    const returnTo = new URL(request.url).searchParams.get("returnTo");
+    let returnPath: string | null = null;
+    if (returnTo) {
+      const target = new URL(returnTo, process.env.APP_URL ?? request.url);
+      if (
+        !returnTo.startsWith("/") ||
+        returnTo.startsWith("//") ||
+        target.origin !== new URL(process.env.APP_URL ?? request.url).origin ||
+        target.pathname !== "/mcp/consent" ||
+        !z.string().uuid().safeParse(target.searchParams.get("request")).success
+      )
+        throw new DomainError("잘못된 인증 복귀 경로입니다.", 400);
+      returnPath = target.pathname + target.search;
+    }
     let linkUserId: string | undefined;
     const session = cookieValue(request, "pm_session");
     if (intent === "link")
@@ -78,7 +92,7 @@ export class GitHubOAuth {
         "DELETE FROM github_oauth_states WHERE expires_at<now()",
       );
       await store.query(
-        "INSERT INTO github_oauth_states(state_hash,browser_hash,verifier_cipher,intent,link_user_id,link_session_hash,expires_at) VALUES($1,$2,$3,$4,$5,$6,now()+interval '10 minutes')",
+        "INSERT INTO github_oauth_states(state_hash,browser_hash,verifier_cipher,intent,link_user_id,link_session_hash,return_path,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '10 minutes')",
         [
           tokenHash(state),
           tokenHash(browser),
@@ -86,6 +100,7 @@ export class GitHubOAuth {
           intent,
           linkUserId ?? null,
           linkUserId ? tokenHash(session) : null,
+          returnPath,
         ],
       );
     });
@@ -124,6 +139,7 @@ export class GitHubOAuth {
         intent: string;
         link_user_id: string | null;
         link_session_hash: string | null;
+        return_path: string | null;
       }>(
         "UPDATE github_oauth_states SET used_at=now() WHERE state_hash=$1 AND browser_hash=$2 AND used_at IS NULL AND expires_at>now() RETURNING *",
         [tokenHash(state), tokenHash(browser)],
@@ -235,7 +251,11 @@ export class GitHubOAuth {
       },
       saved.link_user_id ?? undefined,
     );
-    return { session, cookie: this.browserCookie("", true) };
+    return {
+      session,
+      cookie: this.browserCookie("", true),
+      returnTo: saved.return_path,
+    };
   }
   clearCookie() {
     return this.browserCookie("", true);

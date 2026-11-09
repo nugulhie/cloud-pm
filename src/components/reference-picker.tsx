@@ -1,5 +1,6 @@
 "use client";
 import { useId, useState } from "react";
+import { useDraftRestore } from "./draft-boundary";
 
 export type ReferenceOption = {
   id: string;
@@ -28,6 +29,13 @@ export default function ReferencePicker({
     [query, setQuery] = useState("");
   const [limit, setLimit] = useState(50);
   const control = useId();
+  useDraftRestore(`references:${name}`, (values) =>
+    setSelected(
+      (values[name] ?? [])
+        .filter((id) => options.some((o) => o.id === id && !o.disabledReason))
+        .slice(0, max),
+    ),
+  );
   const byId = new Map(options.map((option) => [option.id, option]));
   const matches = options.filter((option) =>
     `${option.name} ${option.category ?? ""}`

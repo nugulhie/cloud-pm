@@ -2,11 +2,15 @@
 
 ## 원격 연결
 
-웹 서버의 `/api/mcp`는 JSON 응답을 사용하는 stateless Streamable HTTP 엔드포인트입니다. 요청마다 `Authorization: Bearer <프로필에서 발급한 개인 서비스 토큰>`을 전달합니다. 읽기 토큰에는 변경 도구가 노출되지 않으며 공통 서비스에서도 수정 권한을 다시 검사합니다.
+웹 서버의 `/api/mcp`는 stateless Streamable HTTP 엔드포인트입니다. OAuth를 지원하는 클라이언트는 HTTPS 주소를 등록하면 인증 정보를 자동 발견하고 동적 클라이언트 등록 → 서비스 로그인 → 워크스페이스·권한 동의 → PKCE 코드 교환으로 연결합니다. 동의 기본값은 조회 전용이며, 수정은 별도로 선택합니다.
 
-Claude Chat의 사용자 정의 원격 커넥터에 공개 HTTPS MCP URL을 등록하고 Request headers에 `Authorization: Bearer <개인 서비스 토큰>`을 설정합니다. [Claude 공식 안내](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp)는 고정 Bearer 토큰 인증을 지원합니다. 현재 서버는 OAuth 서버를 제공하지 않으며 실제 Claude 계정에서의 연결은 아직 검증하지 않았습니다.
+Claude의 사용자 정의 원격 커넥터에는 `https://cloud-pm.soldoc.co.kr/api/mcp`를 등록합니다. [공식 연결 안내](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp)를 참고하세요. 서비스에 로그인해 허용한 뒤 돌아오면 됩니다. 실제 Claude 사용자 계정의 최종 동의는 사용자가 수행해야 합니다. 공식 MCP SDK를 이용한 자동 발견·동의·교환 검증과 Claude 계정에서의 확인은 구분합니다.
 
-Team·Enterprise의 조직 커넥터에 설정한 고정 자격 증명은 사용하는 멤버들이 공유합니다. 이를 개인별 로그인처럼 취급하면 안 됩니다. 여러 기획자의 개인 저장소 권한을 구분하는 조직 배포에는 사용자별 OAuth 연결을 추가해야 합니다. Claude는 Anthropic 클라우드에서 접속하므로 `localhost` 대신 공개 HTTPS 주소가 필요합니다.
+개인 토큰 방식도 유지합니다. `Authorization: Bearer <프로필에서 발급한 개인 서비스 토큰>`을 요청마다 전달합니다. 어느 방식이든 조회 권한에는 변경 도구가 노출되지 않으며 공통 서비스에서 현재 멤버·저장소 권한을 다시 검사합니다. 공유 자격 증명을 여러 사람의 개인 계정처럼 사용하지 마세요.
+
+접근 토큰은 15분, 회전 갱신 토큰은 30일입니다. 재사용된 갱신 토큰은 연결을 철회하며, 비밀번호 복구도 기존 연결을 만료시킵니다. 프로필 **MCP·API → 계정 인증으로 연결한 MCP → 연결 해제**로 즉시 철회합니다.
+
+회사 IP 제한을 사용하는 운영 환경에서는 [Claude 공식 송신 IP](https://platform.claude.com/docs/en/api/ip-addresses)만 추가하고 MCP·OAuth 경로에 한정합니다. 연결 승인을 위한 브라우저는 기존 허용 네트워크에서 사용합니다.
 
 `APP_URL`은 사용자가 접근하는 공개 웹 origin으로 설정합니다. 다른 origin을 가진 브라우저 요청은 거부하며 원격 MCP 클라이언트는 불필요한 Origin 헤더를 보내지 않도록 구성합니다. HTTP 엔드포인트를 공개할 때는 HTTPS 프록시에서 요청 크기·요청 속도 제한을 적용하세요.
 
@@ -199,3 +203,11 @@ Asana 동명 사용자 지정 CSV 열은 각각 보존하며 기본 담당자와
 PRD의 정책·용어 참조와 하위 태스크·승인된 GitHub 연결을 따른다. 같은 이슈는 중복 집계하지 않는다. 원본이 캐시에 없는 발행 이슈는 `unknown` 상태이며, 정책 편집이 관련 원문을 자동 변경하거나 검토 완료를 뜻하지는 않는다. [API 계약과 권한 규칙](knowledge-impact.md)을 함께 확인한다.
 
 정책 의존관계는 `save_knowledge`의 `dependsOn` 또는 `update_knowledge_fields`의 `patch.dependsOn`으로 등록한다. 예: 환불 정책이 결제 정책을 따르면 환불 정책의 `dependsOn`에 결제 정책 ID를 넣는다. 생략은 유지, `[]`는 해제다. 순환·자기 참조·다른 워크스페이스·용어 연결은 거절한다. `get_knowledge_impact`의 기본 `scope=all`은 의존 정책의 PRD·작업도 집계한다. `scope=direct`는 직접 참조만, `kind=policies`는 의존 정책을 페이지로 조회한다. `policyPath`와 `policyDistance`로 간접 연결 근거를 확인한다.
+
+## 검토·일정·휴지통 도구
+
+- 조회: `get_change_reviews`, `get_task_reviews`, `list_milestones`, `list_releases`, `get_project_timeline`, `get_pm_summary`, `get_notification_settings`, `list_deleted_batches`.
+- 수정: `update_change_review`, `request_task_review`, `decide_task_review`, `save_milestone`, `save_release`, `delete_milestone`, `delete_release_plan`, `apply_schedule_change`, `save_notification_settings`, `restore_deleted_batch`. 도구의 실제 입력 스키마를 먼저 조회합니다.
+- `preview_schedule_change`로 해시·영향 목록을 받은 뒤 선택한 ID를 적용합니다. 다른 변경이 끼면 새 미리보기를 만듭니다.
+- 변경 검토에는 원본 revision과 대상 `targetRecordRevision`이 필요합니다. 태스크 반영에는 현재 태스크 revision도 필요합니다.
+- 비밀번호 복구·소유자 양도·백업 실행은 웹 또는 서버 운영 절차를 사용합니다.

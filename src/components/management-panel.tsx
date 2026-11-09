@@ -1,4 +1,5 @@
 "use client";
+import { draftSaved } from "./draft-boundary";
 import { createId } from "../core/browser-id";
 import DeleteConfirmation from "./delete-confirmation";
 import BulkCreate from "./bulk-create";
@@ -425,6 +426,8 @@ export default function ManagementPanel({
       )}
       {editing !== null && (
         <EditorDialog
+          draftKey={`management:${kind}:${editing}`}
+          revision={current?.revision}
           title={current ? "프로젝트 수정" : "새 항목 등록"}
           busy={busy}
           onClose={() => setEditing(null)}
@@ -434,7 +437,8 @@ export default function ManagementPanel({
             key={`${kind}-${editing}`}
             onSubmit={(e) => {
               e.preventDefault();
-              const f = new FormData(e.currentTarget);
+              const draftForm = e.currentTarget;
+              const f = new FormData(draftForm);
               const value = (key: string) => String(f.get(key) ?? "");
               void run(async () => {
                 const base = current?.data;
@@ -474,6 +478,7 @@ export default function ManagementPanel({
                       : "tasks",
                   { data: input, revision: current?.revision },
                 );
+                draftSaved(draftForm);
               });
             }}
           >
@@ -664,6 +669,7 @@ export default function ManagementPanel({
               <button
                 type="button"
                 disabled={busy}
+                data-draft-close
                 onClick={() => setEditing(null)}
               >
                 취소

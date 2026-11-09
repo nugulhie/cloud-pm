@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Cloud PM verified backup
+
+[Timer]
+OnCalendar=*-*-* 18:00:00 UTC
+RandomizedDelaySec=300
+Persistent=true
+Unit=cloud-pm-backup.service
+
+[Install]
+WantedBy=timers.target

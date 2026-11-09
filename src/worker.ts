@@ -4,6 +4,9 @@ import { serverGitHubClient } from "./github/server-client";
 import { processNextJob } from "./jobs/worker";
 import { setTimeout } from "node:timers/promises";
 import { demoMode } from "./core/auth";
+import { workAlertTick } from "./core/work-alerts";
+import { enqueueReconciliations } from "./operations/sync-maintenance";
+import { operationAlertTick } from "./operations/status";
 
 if (!process.env.DATABASE_URL) {
   console.error(
@@ -21,6 +24,8 @@ if (!process.env.DATABASE_URL) {
   const changes = new GitHubChanges(store, serverGitHubClient(undefined, true));
   const once = process.argv.includes("--once");
   let stopping = false;
+  let lastMaintenance = 0;
+  let lastReconciliation = 0;
   const stop = () => {
     stopping = true;
   };
@@ -29,6 +34,19 @@ if (!process.env.DATABASE_URL) {
   try {
     await changes.bootstrap();
     do {
+      if (Date.now() - lastMaintenance >= 60000) {
+        lastMaintenance = Date.now();
+        try {
+          await workAlertTick(store);
+          if (Date.now() - lastReconciliation >= 3600000) {
+            await enqueueReconciliations(store);
+            lastReconciliation = Date.now();
+          }
+          await operationAlertTick(store);
+        } catch {
+          console.error("업무 알림 정기 처리에 실패했습니다.");
+        }
+      }
       const result = await processNextJob(store, (_repository, job) =>
         changes.process(job),
       );

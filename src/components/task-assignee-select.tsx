@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useDraftRestore } from "./draft-boundary";
 import type { PlanningPerson } from "../core/planning-model";
 import GitHubAssigneeSelect from "./github-assignee-select";
 export default function TaskAssigneeSelect({
@@ -60,8 +61,12 @@ export default function TaskAssigneeSelect({
       active = false;
     };
   }, [project]);
+  useDraftRestore("task-assignee", (values) => {
+    setSelected(values.assigneeUserId?.[0] ?? "");
+    setExternal(values.assigneeAccountMode?.[0] === "github");
+  });
   const member = members.find((m) => m.id === selected);
-  if (!loading && !members.length && !defaultUserId)
+  if (!loading && !members.length && !defaultUserId && !selected)
     return (
       <>
         <input type="hidden" name="assigneeAccountMode" value="github" />

@@ -17,9 +17,22 @@ export interface ChangeEvent {
   }[];
 }
 const fields: Record<string, string> = {
+  targetDate: "목표일",
+  plannedDate: "예정 배포일",
+  actualDate: "실제 배포일",
+  version: "버전",
+  environment: "배포 환경",
+  url: "링크",
+  notes: "릴리스 설명",
+  reviewerId: "검토 담당 계정",
+  note: "검토 의견",
+  requestedBy: "검수 요청자",
+  decidedBy: "검수 처리자",
+  sourceRevision: "검토 원본 버전",
+  sourceId: "원본 ID",
+  reviewedBy: "검토 처리자",
   featureName: "기능명",
   number: "넘버링",
-  sourceId: "원본 ID",
   featurePrefix: "기능 식별자",
   source: "CSV 원본 정보",
   policy: "정책",
@@ -124,12 +137,14 @@ const historySnapshot = (alias: "e" | "p") => `CASE WHEN ${alias}.kind='github'
     CASE WHEN jsonb_typeof(${alias}.data->'value'->'files')='array'
       THEN jsonb_build_object('files',jsonb_array_length(${alias}.data->'value'->'files'))
       ELSE '{}'::jsonb END
+  WHEN ${alias}.kind='change-target' THEN ((${alias}.data->'value')-'target')||(${alias}.data->'value'->'target')
   ELSE ${alias}.data->'value' END`;
 export const changeHistoryQuery = `WITH recent AS MATERIALIZED (
   SELECT id,workspace_id,kind,entity_id,actor,created_at
   FROM events
   WHERE (workspace_id=$1 OR (workspace_id='main' AND kind='github'))
-    AND kind IN ('project','feature','requirement','knowledge','task','github','link','sync','evaluation')
+    AND kind IN ('project','feature','requirement','knowledge','task','github','link','sync','evaluation','milestone','release','task-review','change-review','change-target')
+    AND (kind<>'change-target' OR COALESCE((data->>'revision')::bigint,0)>1)
   ORDER BY created_at DESC,id DESC LIMIT 300
 )
 SELECT r.id,r.kind,r.entity_id,r.actor,r.created_at,
@@ -193,7 +208,15 @@ export async function changeHistory(
                 projects.has(String(v.project)))
             : row.kind === "knowledge"
               ? true
-              : ["feature", "requirement"].includes(row.kind)
+              : [
+                    "feature",
+                    "requirement",
+                    "milestone",
+                    "release",
+                    "task-review",
+                    "change-review",
+                    "change-target",
+                  ].includes(row.kind)
                 ? projects.has(String(v.project))
                 : row.kind === "github"
                   ? items.has(row.entity_id)
@@ -210,7 +233,16 @@ export async function changeHistory(
             snapshot.repositories.every((r) =>
               repos.has(String(r).toLowerCase()),
             )
-          : ["task", "feature", "requirement"].includes(row.kind)
+          : [
+                "task",
+                "feature",
+                "requirement",
+                "milestone",
+                "release",
+                "task-review",
+                "change-review",
+                "change-target",
+              ].includes(row.kind)
             ? projects.has(String(snapshot.project))
             : row.kind === "github"
               ? repos.has(String(snapshot.repository).toLowerCase())
@@ -232,6 +264,11 @@ export async function changeHistory(
         "link",
         "sync",
         "evaluation",
+        "milestone",
+        "release",
+        "task-review",
+        "change-review",
+        "change-target",
       ].includes(row.kind)
     )
       continue;
@@ -293,6 +330,7 @@ export async function changeHistory(
         row.actor,
       target: String(
         v.title ??
+          v.version ??
           v.featureName ??
           v.name ??
           v.task ??

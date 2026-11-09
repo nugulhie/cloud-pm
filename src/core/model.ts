@@ -63,6 +63,8 @@ export type Project = z.infer<typeof projectSchema>;
 export type Feature = z.infer<typeof featureSchema>;
 export type Task = z.infer<typeof taskSchema>;
 export interface GitHubItem {
+  sourceAvailability?: "available" | "unavailable" | "deleted";
+  sourceCheckedAt?: string;
   id: string;
   repository: string;
   number: number;

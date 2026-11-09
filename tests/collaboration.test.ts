@@ -29,6 +29,14 @@ test("댓글 소유권·멘션·담당자·대화 참여자 알림과 읽음·�
     await store.query(
       "INSERT INTO workspace_members(workspace_id,user_id) SELECT 'main',id FROM app_users",
     );
+    // 댓글 알림만 검증한다. 담당자 변경 알림은 별도 업무 알림 테스트에서 다룬다.
+    for (const userId of ["alice", "bob", "carol"])
+      await store.save(
+        "notification-settings",
+        userId,
+        { id: userId, assignments: false },
+        "test",
+      );
     await alice.saveProject({
       id: "p",
       name: "제품",

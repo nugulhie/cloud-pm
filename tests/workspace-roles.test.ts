@@ -191,6 +191,11 @@ test("워크스페이스 역할·초대·토큰 하향 적용·소유자 보호�
       id: comment.data.id,
       revision: comment.revision,
     });
+    for (const notification of (await reader.listNotifications()).notifications)
+      await reader.readNotification({
+        id: notification.id,
+        revision: notification.revision,
+      });
     assert.equal((await reader.listNotifications()).unread, 0);
     const server = createMcpServer(reader),
       client = new Client({ name: "reader-role-test", version: "1" });
@@ -298,6 +303,11 @@ test("기존 조직 관리자의 권한을 한 번 이관하고 명시적 조회
         "INSERT INTO app_users(id,login,display_name,password_hash,github_cipher,github_last4,role) VALUES($1,$2,$2,'unused','unused','0000',$3)",
         [id, login, role],
       );
+    // Explicit creation order avoids equal-timestamp UUID ordering in this legacy fixture.
+    await store.query(
+      "UPDATE app_users SET created_at=now()-interval '1 day' WHERE id=$1",
+      [owner],
+    );
     await new Workspaces(store, owner).joinDefault();
     await new Workspaces(store, admin).joinDefault();
     await new Workspaces(store, viewer).joinDefault();

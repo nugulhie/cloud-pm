@@ -1,4 +1,5 @@
 import { GitHubRateLimitError } from "../github/rate-limit";
+import { resolveOAuthAccess } from "../mcp/oauth-access";
 import { connectionAddress } from "../mcp/connection";
 import { Workspaces } from "../workspaces/service";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -449,16 +450,33 @@ export class Users {
       throw new DomainError("허용되지 않은 요청 출처입니다.", 403);
     if (demoMode()) return { actor: authenticate(request), user: null };
     const credential = this.credential(request);
+    let oauthRole: "read" | "write" | undefined;
     let user: User | undefined;
     if (credential && credential.token.length < 500) {
-      user = (
-        await this.store.query<User>(
-          credential.api
-            ? "SELECT *,api_workspace_id AS current_workspace FROM app_users WHERE api_token_hash=$1"
-            : `SELECT u.*,s.workspace_id AS current_workspace FROM app_users u JOIN app_sessions s ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now()`,
-          [tokenHash(credential.token)],
-        )
-      )[0];
+      if (credential.api && credential.token.startsWith("cmo_")) {
+        if (url.pathname !== "/api/mcp")
+          throw new DomainError(
+            "이 인증은 MCP 연결에서만 사용할 수 있습니다.",
+            401,
+          );
+        const grant = await resolveOAuthAccess(this.store, credential.token);
+        oauthRole = grant.role;
+        user = (
+          await this.store.query<User>(
+            "SELECT *, $2::text AS current_workspace FROM app_users WHERE id=$1",
+            [grant.user_id, grant.workspace_id],
+          )
+        )[0];
+      } else {
+        user = (
+          await this.store.query<User>(
+            credential.api
+              ? "SELECT *,api_workspace_id AS current_workspace FROM app_users WHERE api_token_hash=$1"
+              : `SELECT u.*,s.workspace_id AS current_workspace FROM app_users u JOIN app_sessions s ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now()`,
+            [tokenHash(credential.token)],
+          )
+        )[0];
+      }
     }
     if (!user) {
       const registered = (
@@ -541,7 +559,7 @@ export class Users {
         name: user.login,
         role:
           workspaceRole === "viewer" ||
-          (credential?.api && user.api_role === "read")
+          (credential?.api && (oauthRole ?? user.api_role) === "read")
             ? "read"
             : "write",
         workspaceRole,
@@ -1029,5 +1047,197 @@ export class Users {
       [user.id, tokenHash(credential?.token ?? "")],
     );
     return { updated: true };
+  }
+  private async confirmIdentity(request: Request, currentPassword?: string) {
+    this.requireSession(request);
+    const user = await this.profile(request);
+    const stored = (
+      await this.store.query<User>("SELECT * FROM app_users WHERE id=$1", [
+        user.id,
+      ])
+    )[0]!;
+    if (stored.auth_provider !== "github") {
+      if (
+        !currentPassword ||
+        !(await checkPassword(currentPassword, stored.password_hash))
+      )
+        throw new DomainError("현재 비밀번호를 확인하세요.", 403);
+    } else {
+      const credential = this.credential(request);
+      const fresh = await this.store.query(
+        "SELECT token_hash FROM app_sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>now()+interval '7 days'-interval '15 minutes'",
+        [tokenHash(credential?.token ?? ""), user.id],
+      );
+      if (!fresh.length)
+        throw new DomainError(
+          "본인 확인을 위해 GitHub으로 다시 로그인한 뒤 시도하세요.",
+          403,
+        );
+    }
+    return stored;
+  }
+  async recoveryOptions(request: Request) {
+    this.requireSession(request);
+    const user = await this.profile(request);
+    const owner = (
+      await this.store.query<{ owner_id: string }>(
+        "SELECT owner_id FROM workspace_settings WHERE id='main'",
+      )
+    )[0];
+    if (owner?.owner_id !== user.id)
+      throw new DomainError(
+        "서비스 소유자만 계정 복구 코드를 발급할 수 있습니다.",
+        403,
+      );
+    const users = await this.store.query<{
+      id: string;
+      login: string;
+      display_name: string;
+    }>(
+      "SELECT id,login,display_name FROM app_users WHERE id<>$1 AND auth_provider<>'github' ORDER BY login",
+      [user.id],
+    );
+    return { users };
+  }
+  async issueRecovery(request: Request, input: unknown) {
+    const data = z
+      .strictObject({
+        userId: z.string().uuid(),
+        currentPassword: z.string().max(200).optional(),
+      })
+      .parse(input);
+    const user = await this.confirmIdentity(request, data.currentPassword);
+    const options = await this.recoveryOptions(request);
+    if (!options.users.some((u) => u.id === data.userId))
+      throw new DomainError("복구 가능한 계정을 선택하세요.", 404);
+    const token = randomBytes(32).toString("base64url");
+    await this.store.transaction(async (store) => {
+      await store.query("SELECT id FROM app_users WHERE id=$1 FOR UPDATE", [
+        data.userId,
+      ]);
+      await store.query(
+        "UPDATE password_recoveries SET used_at=now() WHERE user_id=$1 AND used_at IS NULL",
+        [data.userId],
+      );
+      await store.query(
+        "INSERT INTO password_recoveries(token_hash,user_id,created_by,expires_at) VALUES($1,$2,$3,now()+interval '30 minutes')",
+        [tokenHash(token), data.userId, user.id],
+      );
+      await store.save(
+        "account-security",
+        randomUUID(),
+        { action: "recovery-issued", userId: data.userId },
+        user.login,
+      );
+    });
+    return { token, expiresIn: 1800 };
+  }
+  async recoverPassword(input: unknown) {
+    const data = z
+      .strictObject({
+        token: z.string().min(40).max(100),
+        newPassword: password,
+      })
+      .parse(input);
+    return this.store.transaction(async (store) => {
+      const candidate = (
+        await store.query<{ user_id: string }>(
+          "SELECT user_id FROM password_recoveries WHERE token_hash=$1 AND used_at IS NULL AND expires_at>now()",
+          [tokenHash(data.token)],
+        )
+      )[0];
+      if (!candidate)
+        throw new DomainError("복구 코드가 잘못되었거나 만료되었습니다.", 400);
+      // Issuance and redemption both lock the account before its recovery codes.
+      await store.query("SELECT id FROM app_users WHERE id=$1 FOR UPDATE", [
+        candidate.user_id,
+      ]);
+      const token = (
+        await store.query<{ user_id: string }>(
+          "SELECT user_id FROM password_recoveries WHERE token_hash=$1 AND user_id=$2 AND used_at IS NULL AND expires_at>now() FOR UPDATE",
+          [tokenHash(data.token), candidate.user_id],
+        )
+      )[0];
+      if (!token)
+        throw new DomainError("복구 코드가 잘못되었거나 만료되었습니다.", 400);
+      const hash = await hashPassword(data.newPassword);
+      await store.query(
+        "UPDATE app_users SET password_hash=$2,api_token_hash=NULL,api_last4=NULL,updated_at=now() WHERE id=$1",
+        [token.user_id, hash],
+      );
+      await store.query("DELETE FROM app_sessions WHERE user_id=$1", [
+        token.user_id,
+      ]);
+      await store.query(
+        "UPDATE mcp_oauth_grants SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL",
+        [token.user_id],
+      );
+      await store.query(
+        "UPDATE password_recoveries SET used_at=now() WHERE user_id=$1 AND used_at IS NULL",
+        [token.user_id],
+      );
+      await store.save(
+        "account-security",
+        randomUUID(),
+        { action: "password-recovered", userId: token.user_id },
+        "account-recovery",
+      );
+      return { updated: true };
+    });
+  }
+  async transferOwnership(request: Request, input: unknown) {
+    const data = z
+      .strictObject({
+        userId: z.string().uuid(),
+        expectedOwnerId: z.string().uuid(),
+        currentPassword: z.string().max(200).optional(),
+      })
+      .parse(input);
+    const user = await this.confirmIdentity(request, data.currentPassword),
+      access = await this.workspaceAdmin(request);
+    if (
+      access.ownerId !== user.id ||
+      data.expectedOwnerId !== user.id ||
+      data.userId === user.id
+    )
+      throw new DomainError(
+        "현재 소유자만 다른 멤버에게 양도할 수 있습니다.",
+        403,
+      );
+    return this.store.transaction(async (store) => {
+      const workspace = (
+        await store.query<{ owner_id: string }>(
+          "SELECT owner_id FROM workspace_settings WHERE id=$1 FOR UPDATE",
+          [access.workspaceId],
+        )
+      )[0];
+      if (workspace?.owner_id !== user.id)
+        throw new DomainError("소유자가 변경되었습니다. 다시 확인하세요.", 409);
+      const target = await store.query(
+        "SELECT user_id FROM workspace_members WHERE workspace_id=$1 AND user_id=$2",
+        [access.workspaceId, data.userId],
+      );
+      if (!target.length)
+        throw new DomainError("워크스페이스 멤버를 선택하세요.", 404);
+      await store.query(
+        "UPDATE workspace_settings SET owner_id=$2 WHERE id=$1",
+        [access.workspaceId, data.userId],
+      );
+      await store.query(
+        "UPDATE workspace_members SET role=CASE WHEN user_id=$2 THEN 'owner' ELSE 'admin' END WHERE workspace_id=$1 AND user_id IN ($2,$3)",
+        [access.workspaceId, data.userId, user.id],
+      );
+      await store.forWorkspace(access.workspaceId).save(
+        "account-security",
+        randomUUID(),
+        {
+          action: "ownership-transferred",
+          previousOwner: user.id,
+          owner: data.userId,
+        },
+        user.login,
+      );
+      return { updated: true };
+    });
   }
 }

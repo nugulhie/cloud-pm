@@ -1,4 +1,7 @@
 "use client";
+import OAuthConnections from "./oauth-connections";
+import NotificationPreferences from "./notification-preferences";
+import AccountRecovery from "./account-recovery";
 import SettingsLayout from "./settings-layout";
 import McpConnectionPanel from "./mcp-connection-panel";
 import WorkspaceSwitcher from "./workspace-switcher";
@@ -250,6 +253,7 @@ export default function AccountPanel({
                 {register ? "계정 만들기" : "로그인"}
               </button>
             </form>
+            <AccountRecovery call={call} />
           </>
         ) : (
           <>
@@ -466,6 +470,7 @@ export default function AccountPanel({
                         workspaceId={workspaceId}
                         issuedToken={issued}
                       />
+                      <OAuthConnections />
                     </>
                   ),
                 },
@@ -492,11 +497,20 @@ export default function AccountPanel({
                   ),
                 },
                 {
+                  id: "notifications",
+                  title: "알림",
+                  description: "업무 알림과 PM 요약을 설정합니다.",
+                  content: (
+                    <NotificationPreferences workspaceId={workspaceId} />
+                  ),
+                },
+                {
                   id: "security",
                   title: "보안",
                   description: "비밀번호와 로그인 보안을 관리합니다.",
                   content: (
                     <>
+                      <AccountRecovery call={call} admin />
                       <section className="password-settings">
                         <h4>비밀번호 변경</h4>
                         {profile.authProvider === "github" ? (

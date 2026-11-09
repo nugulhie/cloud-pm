@@ -1,4 +1,5 @@
 "use client";
+import OwnershipTransfer from "./ownership-transfer";
 import MemberRoleRow from "./member-role-row";
 import { useEffect, useState, useRef } from "react";
 import type { Users } from "../users/service";
@@ -414,6 +415,14 @@ export default function WorkspaceSettings({
             </p>
           )}
         </>
+      )}
+      {data?.viewerId === data?.ownerId && data && (
+        <OwnershipTransfer
+          call={call}
+          ownerId={data.ownerId}
+          members={data.members}
+          onChanged={load}
+        />
       )}
     </section>
   );

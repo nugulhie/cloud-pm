@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useDraftRestore } from "./draft-boundary";
 
 type User = { login: string; repositories: string[] };
 export default function GitHubAssigneeSelect({
@@ -36,6 +37,12 @@ export default function GitHubAssigneeSelect({
   apiRef.current = api;
   validRef.current = onValidityChange;
   const current = value ?? selected;
+  useDraftRestore(`github-assignee:${name}`, (values) => {
+    if (values[name]) {
+      setSelected(values[name][0] ?? "");
+      onChange?.(values[name][0] ?? "");
+    }
+  });
   const known = users.some(
     (u) => u.login.toLowerCase() === current.toLowerCase(),
   );

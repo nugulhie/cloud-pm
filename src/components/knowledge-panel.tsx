@@ -1,4 +1,5 @@
 "use client";
+import { draftSaved } from "./draft-boundary";
 import { createId } from "../core/browser-id";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { EditorDialog } from "./requirements-panel";
@@ -76,7 +77,8 @@ export default function KnowledgePanel({
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const f = new FormData(event.currentTarget);
+    const draftForm = event.currentTarget;
+    const f = new FormData(draftForm);
     await run(async () => {
       await api("knowledge", {
         revision: editing?.revision,
@@ -98,6 +100,7 @@ export default function KnowledgePanel({
             : {}),
         },
       });
+      draftSaved(draftForm);
       setEditing(undefined);
       setNotice(`${title}을 저장했습니다.`);
     });
@@ -267,6 +270,8 @@ export default function KnowledgePanel({
       </p>
       {editing !== undefined && (
         <EditorDialog
+          draftKey={`knowledge:${kind}:${editing?.data.id ?? "new"}`}
+          revision={editing?.revision}
           title={`${title} ${editing ? "편집" : "등록"}`}
           busy={busy}
           onClose={close}
@@ -389,6 +394,7 @@ export default function KnowledgePanel({
                 type="button"
                 className="button secondary"
                 disabled={busy}
+                data-draft-close
                 onClick={close}
               >
                 닫기

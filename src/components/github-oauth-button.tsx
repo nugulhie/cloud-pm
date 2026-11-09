@@ -9,12 +9,15 @@ export default function GitHubOAuthButton({
   connected?: boolean;
   login?: string | null;
 }) {
+  const [returnTo, setReturnTo] = useState("");
   const [config, setConfig] = useState<{
     enabled: boolean;
     organization: string;
     callbackUrl: string | null;
   } | null>(null);
   useEffect(() => {
+    if (window.location.pathname === "/mcp/consent")
+      setReturnTo(window.location.pathname + window.location.search);
     let active = true;
     fetch("/api/auth/github/config", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
@@ -35,7 +38,7 @@ export default function GitHubOAuthButton({
           className={`button secondary${!config?.enabled ? " disabled" : ""}`}
           href={
             config?.enabled
-              ? `/api/auth/github/start?intent=${link ? "link" : "signin"}`
+              ? `/api/auth/github/start?intent=${link ? "link" : "signin"}${returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ""}`
               : undefined
           }
           aria-disabled={!config?.enabled}

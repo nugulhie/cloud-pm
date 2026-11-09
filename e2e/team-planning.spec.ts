@@ -30,7 +30,9 @@ test("태스크의 담당 계정·시작일·공수·포인트를 편집한다",
   request,
 }) => {
   await visit(page, "태스크 보드");
-  await page.getByText("리소스 산정 작업", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "리소스 산정 작업", exact: true })
+    .click();
   const dialog = page.getByRole("dialog", { name: "태스크 관리", exact: true });
   await dialog
     .getByRole("button", { name: "태스크 수정", exact: true })
@@ -141,9 +143,11 @@ test("공유한 내 작업 보기는 사용자별로 적용되고 개인 보기�
   await visit(page, "태스크 보드");
   const controls = page.locator(".saved-views-bar");
   await controls.getByRole("button", { name: "내 작업", exact: true }).click();
-  await expect(page.getByText("PM 일정 작업", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("리소스 산정 작업", { exact: true }),
+    page.getByRole("button", { name: "PM 일정 작업", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "리소스 산정 작업", exact: true }),
   ).not.toBeVisible();
   await controls
     .getByRole("button", { name: "현재 조건 저장", exact: true })
@@ -172,10 +176,10 @@ test("공유한 내 작업 보기는 사용자별로 적용되고 개인 보기�
       .getByLabel("저장한 보기", { exact: true })
       .selectOption({ label: `${name} · 공유` });
     await expect(
-      other.getByText("리소스 산정 작업", { exact: true }),
+      other.getByRole("button", { name: "리소스 산정 작업", exact: true }),
     ).toBeVisible();
     await expect(
-      other.getByText("PM 일정 작업", { exact: true }),
+      other.getByRole("button", { name: "PM 일정 작업", exact: true }),
     ).not.toBeVisible();
     await expect(
       other
@@ -212,7 +216,9 @@ test("공유한 내 작업 보기는 사용자별로 적용되고 개인 보기�
     .getByRole("button", { name: "보기 삭제 확인", exact: true })
     .click();
   await expect(remove).not.toBeVisible();
-  await expect(page.getByText("PM 일정 작업", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "PM 일정 작업", exact: true }),
+  ).toBeVisible();
 });
 
 test("백로그 순서 변경과 스프린트 생성·배정·시작·종료·미완료 이동을 수행한다", async ({
@@ -277,7 +283,7 @@ test("백로그 순서 변경과 스프린트 생성·배정·시작·종료·�
     .getByRole("button", { name: new RegExp(name) })
     .click();
   await expect(
-    page.getByText("리소스 산정 작업", { exact: true }),
+    page.getByRole("button", { name: "리소스 산정 작업", exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "스프린트 시작", exact: true })
@@ -303,7 +309,7 @@ test("백로그 순서 변경과 스프린트 생성·배정·시작·종료·�
     .getByRole("button", { name: "프로젝트 백로그", exact: true })
     .click();
   await expect(
-    page.getByText("리소스 산정 작업", { exact: true }),
+    page.getByRole("button", { name: "리소스 산정 작업", exact: true }),
   ).toBeVisible();
   const snapshot = await (await request.get("/api/dashboard")).json();
   expect(

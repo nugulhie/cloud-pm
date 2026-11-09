@@ -1,0 +1,10 @@
+[Unit]
+Description=Cloud PM operational health observation
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/cloud-pm-agent
+ExecStart=/bin/sh /opt/cloud-pm-agent/deploy/healthcheck.sh
+TimeoutStartSec=30
+UMask=0077

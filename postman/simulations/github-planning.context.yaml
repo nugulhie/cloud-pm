@@ -21,3 +21,8 @@ fingerprints:
     date: "2026-11-05"
     commit: null
     cli: Postman CLI 1.80.0; Node.js 24; 소유자 모의 검색은 CLI 미로그인으로 생략하고 공식 계약 기반 자체 로컬 모의를 사용한다.
+
+  - id: improvements-oauth-and-workflow-20261109
+    date: "2026-11-09"
+    commit: null
+    cli: Postman CLI 1.80.0; 브라우저 9개 통과, GitHub HTTP 모의 8건·실제 외부 전달 0건. 공식 MCP SDK의 인증 발견·등록·PKCE·동의·조회/수정·철회, 초안 복원·계정 분리, 검토·검수·릴리스·일정·삭제복구와 기존 계획 기능을 격리 DB로 검증했다. 실제 Claude 계정 동의는 포함하지 않는다.
