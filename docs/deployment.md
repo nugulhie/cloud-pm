@@ -1,5 +1,7 @@
 # 운영 배포와 Claude 연결
 
+> 현재 운영 기준은 2026-11-09 개선 배포와 [정기 백업·복구 안내](backup-operations.md)다. 아래 날짜별 배포·정리 기록은 이력으로 유지한다. 현재 인스턴스는 `i-0d478cc462d8b6f4e`이며 기존 사용자·업무 데이터를 보존한다.
+
 새 조직의 최초 소유자 설정과 기존 DB·GitHub 연결의 이전은 [운영 튜토리얼](operations-tutorial.md)을 따릅니다. 외부 PostgreSQL은 `compose.external-db.yaml`과 `deploy/external-db.env.example`을 사용합니다. 아래 `compose.production.yaml`은 서버 안의 DB를 함께 실행하는 구성입니다.
 
 ## 준비
@@ -303,3 +305,15 @@ Cloud PM 컨테이너·DB 볼륨·Docker 이미지 태그 74개를 삭제했다.
 
 새 서버의 이전 최종 백업은 요청에서 지정한 ‘기존 서버’와 별도 위치이므로 삭제 범위를
 확인하는 동안 보관한다. 해당 백업의 별도 삭제 여부는 운영자의 추가 지시에 따른다.
+
+## 2026-11-09 실사용 개선 배포
+
+`improvements-20261109-arm64`를 새 EC2에 반영했다. 코드 커밋은 `2d42f298171a368655342ad11328d8d5e78cab8e`이며 GitHub CI, 단위 테스트 232개, 인증 브라우저 9개와 공식 MCP SDK 검증이 통과했다. ARM64 웹 구성 digest는 `sha256:1e4c8489b2b25771d11b7386e1b1d0bb8dc92f1dd9882efc4a34b3d27386b34e`, 작업자는 `sha256:c3f87361198c27027259e8edb54e0b66cec3cdcf18b0e0de910227e942f27714`이다.
+
+기존 환경은 RELEASE만 변경하고 DB 이미지를 유지했다. 배포 직전·직후 계정 6개, 워크스페이스 2개, records 2391개, history 4505개가 일치했다. 사전 DB·환경·compose는 `/var/backups/cloud-pm-agent/improvements-20261109-arm64/`에 보관한다. 이후 작업자의 알림·누락 보정으로 업무 레코드는 증가할 수 있다.
+
+매일 03시 전후 백업과 1분 상태 관찰 타이머를 설치했다. 첫 DB dump 104,227,639바이트를 네트워크가 차단된 별도 PostgreSQL에 실제 복원했고, S3 업로드 후 SHA256을 다시 확인했다. 전용 비공개·AES256·버전 관리 버킷의 `production/`에 30일 수명 주기 정책을 적용했다. 암호화 키·환경은 로컬 root 전용 백업으로 보존하며 DB와 별도로 관리한다.
+
+백업 업로드용 인스턴스 역할을 별도로 구성하고 기존 CloudWatch·SSM 권한을 보존했다. 디스크·앱·작업자·DB·EC2 CPU·상태 검사 경보는 CloudWatch 콘솔에 만들었으며 외부 메시지 수신처는 설정하지 않았다.
+
+기존 회사 IP 제한과 공용 ALB 규칙을 보존했다. Claude 공식 송신 CIDR의 Cloud PM MCP·OAuth 경로만 허용하고, 같은 송신지의 다른 경로·공용 호스트는 거부한다. `/api/health`와 인증 메타데이터는 정상 응답, 미인증 업무·운영·복구 API는 401, MCP는 인증 메타데이터를 포함한 401 challenge를 확인했다. 실제 Claude 계정의 최종 연결 동의는 사용자가 진행한다.
