@@ -152,7 +152,9 @@ test("설정 탭에서 프로필·GitHub·MCP를 구분하고 입력·발급 토
     dialog.getByRole("tab", { name: "보안", exact: true }),
   ).toBeFocused();
   await expect(
-    dialog.getByLabel("현재 비밀번호", { exact: true }),
+    dialog
+      .locator(".password-settings")
+      .getByLabel("현재 비밀번호", { exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Home");
   await expect(
@@ -188,4 +190,91 @@ test("모바일 설정은 가로 탭과 내부 스크롤을 제공하고 조회 
   await page.screenshot({
     path: ".data/ux-review/profile-settings-mobile.png",
   });
+});
+
+test("MCP 연결 목록의 잘못된 성공 응답은 설정 창을 유지하고 재시도한다", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const { dialog } = await mockAccount(page);
+  await dialog.getByRole("tab", { name: "MCP·API", exact: true }).click();
+  const section = dialog.locator(".oauth-connections");
+  await expect(section.getByRole("alert")).toContainText(
+    "MCP 연결 목록 응답을 확인하지 못했습니다.",
+  );
+  await page.route("**/api/auth/mcp/oauth/connections", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await section
+    .getByRole("button", { name: "연결 목록 다시 불러오기", exact: true })
+    .click();
+  await expect(section.getByRole("alert")).toHaveCount(0);
+  await expect(
+    section.getByText("계정 인증으로 연결한 클라이언트가 없습니다.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await dialog.getByRole("tab", { name: "프로필", exact: true }).click();
+  await expect(dialog.getByLabel("표시 이름", { exact: true })).toHaveValue(
+    "기획자",
+  );
+  expect(errors).toEqual([]);
+});
+
+test("복구 계정 목록의 잘못된 응답은 보안 설정을 유지하고 다시 조회한다", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const { dialog } = await mockAccount(page);
+  await dialog.getByRole("tab", { name: "보안", exact: true }).click();
+  const section = dialog.locator(".account-recovery");
+  await section.getByText("다른 계정의 비밀번호 복구", { exact: true }).click();
+  await expect(section.getByRole("alert")).toContainText(
+    "복구 계정 목록 응답을 확인하지 못했습니다.",
+  );
+  await page.route("**/api/auth/recovery/options", (route) =>
+    route.fulfill({ json: { users: [] } }),
+  );
+  await section
+    .getByRole("button", { name: "복구 계정 다시 불러오기", exact: true })
+    .click();
+  await expect(section.getByRole("alert")).toHaveCount(0);
+  await expect(
+    dialog.getByRole("button", { name: "비밀번호 변경", exact: true }),
+  ).toBeEnabled();
+  expect(errors).toEqual([]);
+});
+
+test("알림 설정의 잘못된 응답은 창을 유지하고 재조회 후 편집한다", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.route("**/api/workflow/notification-settings", (route) =>
+    route.fulfill({ json: {} }),
+  );
+  const { dialog } = await mockAccount(page);
+  await dialog.getByRole("tab", { name: "알림", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "알림 설정 응답을 확인하지 못했습니다.",
+  );
+  await page.route("**/api/workflow/notification-settings", (route) =>
+    route.fulfill({
+      json: {
+        data: { due: true, assignments: true, daily: false, weekly: false },
+        revision: 0,
+      },
+    }),
+  );
+  await dialog
+    .getByRole("button", { name: "알림 설정 다시 불러오기", exact: true })
+    .click();
+  await expect(dialog.getByRole("checkbox")).toHaveCount(4);
+  await expect(
+    dialog.getByRole("checkbox", { name: "일일 PM 요약", exact: true }),
+  ).not.toBeChecked();
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  expect(errors).toEqual([]);
 });

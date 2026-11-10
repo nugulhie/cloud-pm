@@ -105,6 +105,9 @@ test("관리 목록의 프로젝트·검색 범위, 수정 모달과 충돌 시 
     );
     await expect(editor).toBeVisible();
     await editor.getByRole("button", { name: "취소", exact: true }).click();
+    await editor
+      .getByRole("button", { name: "폐기하고 닫기", exact: true })
+      .click();
     await page.getByRole("button", { name: "새로고침", exact: true }).click();
     const updated = page
       .locator(".management-row")
@@ -287,7 +290,7 @@ test("프로젝트를 바꾼 후 도착한 이전 프로젝트 AI 분석을 섞�
     await page.getByLabel("프로젝트 필터").selectOption(id);
     const requested = page.waitForRequest("**/api/analysis");
     await page
-      .getByRole("button", { name: "✧ 선택 프로젝트 AI 분석", exact: true })
+      .getByRole("button", { name: "선택 프로젝트 AI 분석", exact: true })
       .click();
     await requested;
     await page.getByLabel("프로젝트 필터").selectOption(other);
@@ -296,7 +299,7 @@ test("프로젝트를 바꾼 후 도착한 이전 프로젝트 AI 분석을 섞�
     await completed;
     await expect(
       page.getByRole("button", {
-        name: "✧ 선택 프로젝트 AI 분석",
+        name: "선택 프로젝트 AI 분석",
         exact: true,
       }),
     ).toBeEnabled();

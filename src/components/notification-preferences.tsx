@@ -19,7 +19,17 @@ export default function NotificationPreferences({
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const data = await r.json();
-    if (!r.ok) throw new Error(data.error ?? "알림 설정 요청 실패");
+    if (!r.ok) throw new Error(data?.error ?? "알림 설정 요청 실패");
+    if (
+      body === undefined &&
+      (!data?.data ||
+        !Number.isInteger(data.revision) ||
+        data.revision < 0 ||
+        !["due", "assignments", "daily", "weekly"].every(
+          (key) => typeof data.data[key] === "boolean",
+        ))
+    )
+      throw new Error("알림 설정 응답을 확인하지 못했습니다.");
     return data;
   };
   const query = usePlanningData<{
@@ -43,6 +53,11 @@ export default function NotificationPreferences({
       </p>
       {(query.error || action.error) && (
         <p role="alert">{query.error || action.error}</p>
+      )}
+      {query.error && (
+        <button onClick={query.reload} disabled={query.loading}>
+          알림 설정 다시 불러오기
+        </button>
       )}
       {action.notice && <p role="status">{action.notice}</p>}
       {query.data && (

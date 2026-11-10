@@ -193,7 +193,10 @@ export default function Dashboard() {
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const sidebar = document.getElementById("workspace-navigation");
-    sidebar?.querySelector<HTMLElement>(".nav.active")?.focus();
+    const entry =
+      sidebar?.querySelector<HTMLElement>(".nav.active:not(:disabled)") ??
+      sidebar?.querySelector<HTMLElement>("button:not(:disabled), a[href]");
+    entry?.focus();
     const handleKey = (event: KeyboardEvent) => {
       if (
         event.defaultPrevented ||
@@ -230,7 +233,11 @@ export default function Dashboard() {
     return () => {
       document.body.style.overflow = overflow;
       sidebar?.removeEventListener("keydown", handleKey);
-      previous?.focus({ preventScroll: true });
+      const returnFocus =
+        previous && previous !== document.body
+          ? previous
+          : document.querySelector<HTMLElement>(".navigation-trigger");
+      returnFocus?.focus({ preventScroll: true });
     };
   }, [navigationOpen]);
   useEffect(() => {
@@ -970,6 +977,7 @@ export default function Dashboard() {
                 {group.indices.map((i) => (
                   <button
                     key={tabs[i]}
+                    disabled={!data}
                     aria-label={tabs[i]}
                     aria-current={tab === tabs[i] ? "page" : undefined}
                     className={tab === tabs[i] ? "nav active" : "nav"}

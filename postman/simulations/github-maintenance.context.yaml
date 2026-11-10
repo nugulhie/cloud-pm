@@ -6,18 +6,37 @@ assumptions:
     status: supported
     claim: 404는 원본 삭제와 권한 제거를 구분하지 않으며 삭제로 단정하지 않는다.
     reason: GitHub 공식 문서는 비공개 자원의 인증 실패에도 404가 반환될 수 있다고 설명한다.
-    verification: 2026-11-09 HTTP 시뮬레이션에서 6건 모의·실제 전달 0건으로 개별 404 본문 제거와 저장소 접근 불가를 검증했다. Orbit의 증분 목록 계약과 공식 문서를 사용했다.
-    source: https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api; src/operations/sync-maintenance.ts
-    updated_at: "2026-11-09"
+    verification: >-
+      2026-11-09 HTTP 시뮬레이션에서 6건 모의·실제 전달 0건으로 개별 404 본문 제거와 저장소 접근 불가를 검증했다.
+      Orbit의 증분 목록 계약과 공식 문서를 사용했다.
+
+      2026-11-10 재검증: HTTP 모의 6건·실제 외부 전달 0건으로 증분 수집, 중복 보정 억제, 404 본문 제거, 실패 커서
+      유지와 API 한도 대기를 다시 확인했다.
+    source:
+      https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api;
+      src/operations/sync-maintenance.ts
+    updated_at: "2026-11-10"
   - id: reconciliation-watermark
     status: supported
     claim: 완료한 보정만 커서를 전진하며 한도 대기는 원본 접근 불가로 처리하지 않는다.
     reason: 조회에 실패한 범위를 건너뛰면 누락이 영구화되므로 마지막 성공 시각과 60초 겹침을 사용한다.
-    verification: 2026-11-09 HTTP 시뮬레이션에서 성공 커서 갱신, 실패 커서 유지, 시간당 중복 억제와 API 한도 대기를 검증했다. 실제 사용자·이슈를 수정하지 않았다.
-    source: src/github/changes.ts; src/jobs/worker.ts; https://docs.github.com/en/rest/issues/issues
-    updated_at: "2026-11-09"
+    verification: >-
+      2026-11-09 HTTP 시뮬레이션에서 성공 커서 갱신, 실패 커서 유지, 시간당 중복 억제와 API 한도 대기를 검증했다. 실제
+      사용자·이슈를 수정하지 않았다.
+
+      2026-11-10 재검증: HTTP 모의 6건·실제 외부 전달 0건으로 증분 수집, 중복 보정 억제, 404 본문 제거, 실패 커서
+      유지와 API 한도 대기를 다시 확인했다.
+    source: src/github/changes.ts; src/jobs/worker.ts;
+      https://docs.github.com/en/rest/issues/issues
+    updated_at: "2026-11-10"
 fingerprints:
   - id: maintenance-20261109
     date: "2026-11-09"
     commit: null
     cli: Postman CLI 1.80.0. CLI 미로그인으로 소유자 모의 검색을 생략하고 공식 계약 기반 로컬 모의를 사용한다.
+  - id: full-audit-github-maintenance-20261110
+    date: 2026-11-10
+    commit: fe80c8516b4937360578938be8d1714b06ea8479
+    cli: Postman CLI 1.80.0; API 소스 기준 커밋. 새 화면 수정본의 검증은
+      docs/testing-audit-2026-11-10.md 참고. 기존 공식 계약 기반 로컬 모의를 재사용했으며 실제 GitHub
+      원본은 수정하지 않았다.

@@ -35,14 +35,14 @@ function fields(root: HTMLElement) {
   ].filter(
     (e) =>
       !["password", "file", "search", "submit", "button"].includes(e.type) &&
-      !!(e.name || e.getAttribute("aria-label")) &&
+      !!e.name &&
       !e.closest("[data-draft-ignore]"),
   );
 }
 function fieldKey(
   e: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
 ) {
-  return e.name || `@${e.getAttribute("aria-label")}`;
+  return e.name;
 }
 function snapshot(root: HTMLElement) {
   const values: Values = Object.create(null);

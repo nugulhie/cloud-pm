@@ -124,7 +124,7 @@ test("프로젝트 생성 시 식별자를 자동 생성·직접 지정하고 �
   expect(duplicate.ok()).toBeTruthy();
   await page.goto("/");
   await page
-    .getByRole("button", { name: "＋ 프로젝트 만들기", exact: true })
+    .getByRole("button", { name: "프로젝트 만들기", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: "프로젝트 등록" });
   await dialog

@@ -25,6 +25,10 @@ test("작업 작성 창에서 키보드 이동과 배경 클릭으로 입력을 
   await page.keyboard.press("Tab");
   await expect(close).toBeFocused();
   await page.keyboard.press("Escape");
+  await expect(title).toHaveValue("작성 중인 작업");
+  await dialog
+    .getByRole("button", { name: "폐기하고 닫기", exact: true })
+    .click();
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -133,4 +137,42 @@ test("활동을 나누어 표시하고 호환 프로젝트만 연결하며 필�
   await page.getByRole("button", { name: "태스크 보드", exact: true }).click();
   await expect(page.getByLabel("태스크 검색")).toHaveValue("");
   await expect(page.getByLabel("프로젝트 필터")).toHaveValue("ux-frontend");
+});
+
+test("초기 데이터가 준비된 뒤 메뉴를 활성화해 빠른 클릭이 유실되지 않는다", async ({
+  page,
+}) => {
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/dashboard", async (route) => {
+    await pending;
+    await route.continue();
+  });
+  try {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const requested = page.waitForRequest("**/api/dashboard");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await requested;
+    const trigger = page.getByRole("button", {
+        name: "메뉴 열기",
+        exact: true,
+      }),
+      navigation = page.getByRole("button", { name: "PRD 관리", exact: true });
+    await trigger.click();
+    await expect(navigation).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    release();
+    await trigger.click();
+    await expect(navigation).toBeEnabled();
+    await navigation.click();
+    await expect(
+      page.getByRole("heading", { name: "PRD 관리", level: 1, exact: true }),
+    ).toBeVisible();
+  } finally {
+    release();
+  }
 });

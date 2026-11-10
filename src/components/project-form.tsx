@@ -117,11 +117,18 @@ export default function ProjectForm({
             선택 해제
           </button>
         </div>
+        {selected.map((repository) => (
+          <input
+            key={repository}
+            type="hidden"
+            name="draftRepositories"
+            value={repository}
+          />
+        ))}
         <div className="repository-options">
           {visible.map((r) => (
             <label key={r}>
               <input
-                name="draftRepositories"
                 value={r}
                 type="checkbox"
                 checked={selected.includes(r)}

@@ -31,3 +31,7 @@ The proxy owns the child lifecycle and stops with it. `GitHub HTTP simulation: .
 ## Webhook incremental processing — 2026-11-03
 
 Run `tests/github-webhook-simulation.ts` with the same simulation (proxy port 4915 is used in the recorded run). The signed receiver and persistent queue feed the actual worker processor. Issue payloads and unchanged-commit PR metadata need no external request. A new PR fetches files, commits and two CI endpoints only. `/pulls/99/files` injects a primary-limit 403 with reset headers; its job remains pending with zero consumed attempts while another issue still completes. The proxy report must show five mocked requests and zero passed through. These synthetic contracts do not establish production App permissions or GitHub delivery timing.
+
+## Full regression — 2026-11-10
+
+Repeated the real HTTP client metadata checks (6 mocked requests) and signed webhook/worker processing checks (5 mocked requests). Both runs passed their state assertions with zero traffic passed through. Reused the existing official-contract fixtures. This does not establish live GitHub permissions or delivery timing. See `docs/testing-audit-2026-11-10.md` for the broader UI and isolated-service audit.

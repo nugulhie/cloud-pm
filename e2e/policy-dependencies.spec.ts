@@ -47,6 +47,11 @@ test("체크박스로 정책을 추가·해제하고 기준 정책에서 간접 
     data: { id: term, name: names.term, kind: "glossary", content: "정의" },
   });
   await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect(
+    page
+      .getByRole("combobox", { name: "프로젝트 필터", exact: true })
+      .locator(`option[value="${project}"]`),
+  ).toHaveCount(1);
   await page.getByRole("button", { name: "정책 저장소", exact: true }).click();
   const card = (name: string) =>
     page
