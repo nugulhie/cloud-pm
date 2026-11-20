@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-20T02:54:24.253Z",
+  "title": "Design System: 솔닥 Cloud PM",
+  "extensions": {
+    "colorMeta": {
+      "soldoc-blue": {
+        "role": "primary",
+        "displayName": "Soldoc Blue",
+        "canonical": "#008def",
+        "tonalRamp": [
+          "#0f2a3d",
+          "#004e85",
+          "#006fbd",
+          "#0090f5",
+          "#33abff",
+          "#70c4ff",
+          "#addeff",
+          "#ebf4fa"
+        ]
+      },
+      "action-blue": {
+        "role": "primary",
+        "displayName": "Action Blue",
+        "canonical": "#006fbf",
+        "tonalRamp": [
+          "#0f2a3d",
+          "#004d85",
+          "#006ebd",
+          "#008ef5",
+          "#33aaff",
+          "#70c3ff",
+          "#adddff",
+          "#ebf3fa"
+        ]
+      },
+      "signal-orange": {
+        "role": "secondary",
+        "displayName": "Signal Orange",
+        "canonical": "#fc7e2f",
+        "tonalRamp": [
+          "#3d2110",
+          "#833402",
+          "#ba4903",
+          "#f15f03",
+          "#fc8236",
+          "#fda872",
+          "#fecdaf",
+          "#faf1eb"
+        ]
+      },
+      "chart-navy": {
+        "role": "tertiary",
+        "displayName": "Chart Navy",
+        "canonical": "#102b46",
+        "tonalRamp": [
+          "#182635",
+          "#19426c",
+          "#235e9a",
+          "#2e7ac7",
+          "#5999d9",
+          "#8bb8e4",
+          "#bdd6f0",
+          "#edf2f7"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1c2d3e",
+        "tonalRamp": [
+          "#1e262f",
+          "#29425b",
+          "#3b5e82",
+          "#4c7aa9",
+          "#7299c0",
+          "#9db8d3",
+          "#c7d6e6",
+          "#eff2f5"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas",
+        "canonical": "#f4f6f8",
+        "tonalRamp": [
+          "#21262b",
+          "#344251",
+          "#495e73",
+          "#5f7a96",
+          "#8299b0",
+          "#a8b8c7",
+          "#cdd6df",
+          "#f1f2f4"
+        ]
+      },
+      "done-green": {
+        "role": "semantic",
+        "displayName": "Done Green",
+        "canonical": "#216847",
+        "tonalRamp": [
+          "#1a3227",
+          "#206545",
+          "#2d8f62",
+          "#3bba7f",
+          "#64ce9d",
+          "#93ddba",
+          "#c1ebd8",
+          "#eef6f3"
+        ]
+      },
+      "attention-amber": {
+        "role": "semantic",
+        "displayName": "Attention Amber",
+        "canonical": "#8b4c16",
+        "tonalRamp": [
+          "#372516",
+          "#723f12",
+          "#a3591a",
+          "#d37421",
+          "#e3934f",
+          "#ebb484",
+          "#f4d4b9",
+          "#f8f2ed"
+        ]
+      },
+      "danger-red": {
+        "role": "semantic",
+        "displayName": "Danger Red",
+        "canonical": "#b53d43",
+        "tonalRamp": [
+          "#321b1c",
+          "#632125",
+          "#8d3034",
+          "#b73e44",
+          "#cc666b",
+          "#db9498",
+          "#eac2c4",
+          "#f6eeef"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "페이지 제목. 화면마다 하나."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "패널·섹션 제목."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "본문, 표의 주요 셀, 태스크 제목."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "버튼, 입력, 표 머리, 메뉴 항목."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "보조 설명, 메타 정보, 상태 칩."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "PR 번호, 파일 경로, diff."
+      }
+    },
+    "shadows": [
+      {
+        "name": "overlay",
+        "value": "0 24px 80px #0c233b26",
+        "purpose": "모달·편집 대화상자 전용."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-change",
+        "value": "0.15s ease",
+        "purpose": "버튼·메뉴의 배경·테두리·글자색 전환. reduced-motion에서는 0초."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "600px"
+      },
+      {
+        "name": "mobile",
+        "value": "720px"
+      },
+      {
+        "name": "tablet",
+        "value": "1100px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "화면의 핵심 행동 하나.",
+      "html": "<button class=\"ds-btn-primary\">+ 프로젝트 만들기</button>",
+      "css": ".ds-btn-primary{font-family:Pretendard, -apple-system, BlinkMacSystemFont, \"Apple SD Gothic Neo\", \"Segoe UI\", sans-serif;background:#006fbf;color:#fff;border:1px solid #006fbf;border-radius:6px;padding:10px 16px;height:40px;font-size:12px;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s}.ds-btn-primary:hover{background:#005d9f;border-color:#005d9f}.ds-btn-primary:focus-visible{outline:3px solid #008def66;outline-offset:3px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "보조 행동.",
+      "html": "<button class=\"ds-btn-secondary\">CSV 가져오기</button>",
+      "css": ".ds-btn-secondary{font-family:Pretendard, -apple-system, BlinkMacSystemFont, \"Apple SD Gothic Neo\", \"Segoe UI\", sans-serif;background:#fff;color:#3f5265;border:1px solid #d7e0e9;border-radius:6px;padding:10px 16px;height:40px;font-size:12px;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s}.ds-btn-secondary:hover{background:#f4f8fc;border-color:#b9cddd}.ds-btn-secondary:focus-visible{outline:3px solid #008def66;outline-offset:3px}"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "삭제·되돌릴 수 없는 작업.",
+      "html": "<button class=\"ds-btn-danger\">삭제</button>",
+      "css": ".ds-btn-danger{font-family:Pretendard, -apple-system, BlinkMacSystemFont, \"Apple SD Gothic Neo\", \"Segoe UI\", sans-serif;background:#fff;color:#b53d43;border:1px solid #efd3d5;border-radius:6px;padding:10px 16px;height:40px;font-size:12px;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s}.ds-btn-danger:hover{background:#fff2f2;border-color:#e2a9ae}.ds-btn-danger:focus-visible{outline:3px solid #008def66;outline-offset:3px}"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "검색·필터 입력.",
+      "html": "<input class=\"ds-input\" placeholder=\"태스크 제목 검색...\">",
+      "css": ".ds-input{font-family:Pretendard, -apple-system, BlinkMacSystemFont, \"Apple SD Gothic Neo\", \"Segoe UI\", sans-serif;background:#fff;color:#1c2d3e;border:1px solid #d7e0e9;border-radius:6px;padding:9px 11px;height:38px;font-size:12px;width:260px}.ds-input:focus{border-color:#008def;outline:3px solid #008def66;outline-offset:3px}"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "네이비 프레임의 세로 메뉴와 활성 항목.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-nav-label\">업무</span><a class=\"ds-nav-item ds-active\" href=\"#\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\"><path d=\"M3 3h7v8H3z M14 3h7v5h-7z M3 15h7v6H3z M14 12h7v9h-7z\"/></svg>프로젝트 현황</a><a class=\"ds-nav-item\" href=\"#\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\"><path d=\"M4 4h16v16H4z M4 9h16 M10 9v11\"/></svg>태스크 보드</a></nav>",
+      "css": ".ds-nav{font-family:Pretendard, -apple-system, BlinkMacSystemFont, \"Apple SD Gothic Neo\", \"Segoe UI\", sans-serif;background:#102b46;padding:14px;width:232px;display:flex;flex-direction:column;gap:2px}.ds-nav-label{color:#94abc1;font-size:12px;font-weight:650;letter-spacing:1px;padding:0 12px 6px}.ds-nav-item{position:relative;display:flex;align-items:center;gap:10px;min-height:37px;padding:8px 11px;border-radius:4px;color:#c4d2df;font-size:13px;text-decoration:none;transition:background .15s,color .15s}.ds-nav-item svg{color:#a6bdcf}.ds-nav-item:hover{background:#ffffff0b;color:#fff}.ds-nav-item.ds-active{background:#008def25;color:#fff;font-weight:650}.ds-nav-item.ds-active svg{color:#80ceff}.ds-nav-item.ds-active::before{content:\"\";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:2px;background:#fc7e2f}.ds-nav-item:focus-visible{outline:3px solid #008def66;outline-offset:3px}"
+    },
+    {
+      "name": "Status Chips",
+      "kind": "chip",
+      "refersTo": "status-chip-done",
+      "description": "완료·주목 상태 표시.",
+      "html": "<span class=\"ds-chip ds-done\">완료</span> <span class=\"ds-chip ds-attention\">차단 2개</span>",
+      "css": ".ds-chip{font-family:Pretendard, -apple-system, BlinkMacSystemFont, \"Apple SD Gothic Neo\", \"Segoe UI\", sans-serif;display:inline-block;border-radius:4px;padding:4px 7px;font-size:12px;line-height:1.4}.ds-done{background:#edf7f1;color:#216847}.ds-attention{background:#fff6eb;color:#8b4c16;border:1px solid #f4d7bc}"
+    },
+    {
+      "name": "Project Ledger Row",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "프로젝트 현황의 기준 행 목록.",
+      "html": "<div class=\"ds-ledger\"><div class=\"ds-row\"><div><span class=\"ds-id\">XUYYL</span> <b>고객 플랫폼</b><p>가입부터 결제까지, 연결된 고객 경험 만들기</p></div><div><small>2 / 6개 완료</small><div class=\"ds-bar\"><i style=\"width:33%\"></i></div></div><div><span class=\"ds-chip-a\">차단 2개</span></div></div></div>",
+      "css": ".ds-ledger{font-family:Pretendard, -apple-system, BlinkMacSystemFont, \"Apple SD Gothic Neo\", \"Segoe UI\", sans-serif;background:#fff;border:1px solid #e1e7ed;border-radius:8px;width:640px;color:#1c2d3e}.ds-row{display:grid;grid-template-columns:2fr 1fr auto;gap:20px;align-items:center;padding:20px;transition:background .15s}.ds-row:hover{background:#f4f8fc}.ds-row b{font-size:15px;font-weight:650}.ds-row p{margin:6px 0 0;font-size:14px;color:#667689}.ds-row small{font-size:12px;color:#667689}.ds-id{font-family:ui-monospace,monospace;font-size:12px;border:1px solid #d7e0e9;border-radius:4px;padding:1px 6px;color:#18334c}.ds-bar{height:4px;background:#e1e7ed;border-radius:4px;margin-top:8px}.ds-bar i{display:block;height:100%;background:#008def;border-radius:4px}.ds-chip-a{font-size:12px;background:#fff6eb;color:#8b4c16;border:1px solid #f4d7bc;border-radius:4px;padding:1px 7px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Control Room Ledger",
+    "overview": "관제실의 상황판처럼, 짙은 네이비 프레임 안에서 여러 저장소에 걸친 업무 상태를 한눈에 훑는 장부다. 화면의 주인공은 행 목록과 표에 정렬된 사실이며, 장식은 그 사실을 읽는 속도를 늦추지 않는 범위에서만 존재한다. 색은 평소에 조용하고, 개입이 필요한 곳(차단·지연·선택)에서만 켜진다.\n\n밀도는 높게 유지하되 글자는 읽을 수 있어야 한다. PM이 하루에 여러 번 열어 현황을 확인하는 도구이므로 한 화면에 많은 행을 담고, 대신 크기 계층·정렬·여백 리듬으로 구분한다. 면은 평평하고, 테두리와 배경 톤 차이로 구역을 나눈다. 떠 있는 것(모달·메뉴)만 그림자를 갖는다.\n\n솔닥 공식 로고의 파랑과 주황은 브랜드의 목소리다. 파랑은 행동(주요 버튼·링크·초점)을, 주황은 선택 표시와 주목할 항목을 맡는다. 둘 다 넓은 면을 칠하지 않는다.",
+    "keyCharacteristics": [
+      "네이비 사이드바 프레임 + 밝은 회청색 캔버스 + 흰 패널의 세 층 구조",
+      "행 목록·표 중심의 높은 정보 밀도, 12px 미만 글자 없음",
+      "평면 표면, 1px 테두리, 그림자는 떠 있는 요소에만",
+      "파랑은 행동, 주황은 선택·주목, 초록·호박·빨강은 상태 의미 전용",
+      "Pretendard 단일 서체, 굵기(400·650·750)로 위계 표현"
+    ],
+    "rules": [
+      {
+        "name": "The Quiet Until Needed Rule",
+        "body": "화면 대부분은 중립색이다. 채도 있는 색은 행동(파랑), 선택·주목(주황), 상태 의미(초록·호박·빨강)를 전달할 때만 등장한다. 장식 목적의 색 면은 없다.",
+        "section": "colors"
+      },
+      {
+        "name": "The White-Text Contrast Rule",
+        "body": "흰 글자를 올리는 파랑은 항상 Action Blue 이상으로 짙게 쓴다. 로고 파랑 위에 흰 글자를 올리지 않는다.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Source Rule",
+        "body": "새 색은 hex로 직접 쓰지 않고 이 문서의 토큰을 CSS 변수로 참조한다. 같은 역할의 색이 두 값으로 존재하면 하나로 합친다.",
+        "section": "colors"
+      },
+      {
+        "name": "The 12px Floor Rule",
+        "body": "어떤 글자도 12px보다 작지 않다. 정보가 넘치면 글자를 줄이지 않고 행을 접거나 보조 정보를 상세로 옮긴다.",
+        "section": "typography"
+      },
+      {
+        "name": "The Weight Not Size Rule",
+        "body": "같은 크기 안의 강조는 굵기(400→650)로 한다. 강조를 위해 크기 단계를 새로 만들지 않는다.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "패널·카드·버튼은 휴식 상태와 호버 상태 모두 그림자가 없다. 호버는 배경 톤과 테두리 색 변화로 표현한다.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do 새 색·반경·간격을 이 문서의 토큰(CSS 변수)으로 참조한다.",
+      "Do 개입이 필요한 항목(차단·지연·미할당·검수 대기)에만 Attention Amber와 Signal Orange를 쓴다.",
+      "Do 목록은 행 목록·표로 만들고 열을 의미 단위로 정렬한다.",
+      "Do 호버와 선택은 배경 톤·테두리 색으로 표현하고 0.15초 안에 전환한다.",
+      "Do 모든 조작 요소에 Soldoc Blue 초점 외곽선을 보장한다."
+    ],
+    "donts": [
+      "Don't 12px보다 작은 글자를 쓰지 않는다(The 12px Floor Rule).",
+      "Don't 패널·카드·버튼에 그림자를 주지 않는다. 그림자는 모달·메뉴 같은 떠 있는 요소 전용이다.",
+      "Don't 로고 파랑(soldoc-blue) 위에 흰 글자를 올리지 않는다.",
+      "Don't 주황을 글자색이나 넓은 배경으로 쓰지 않는다.",
+      "Don't 컴포넌트 CSS에 새 hex 값이나 4·6·8·10px 밖의 모서리 반경을 직접 쓰지 않는다."
+    ]
+  }
+}
