@@ -42,7 +42,7 @@ import BacklogSprintPanel from "./backlog-sprint-panel";
 import AssigneeMappingPanel from "./assignee-mapping-panel";
 import SavedViewsBar from "./saved-views-bar";
 import IssueAssigneeEditor from "./issue-assignee-editor";
-import type { TaskFilters } from "../core/planning-model";
+import type { TaskFilters, PlanningPerson } from "../core/planning-model";
 import FileDiff from "./file-diff";
 import AsanaFileImport from "./asana-file-import";
 import DeleteConfirmation from "./delete-confirmation";
@@ -154,6 +154,12 @@ export default function Dashboard() {
   const [activityLimit, setActivityLimit] = useState(40);
   const [overviewLimit, setOverviewLimit] = useState(6);
   const [attentionLimit, setAttentionLimit] = useState(5);
+  // Member lists for inline assignment, keyed by workspace and project.
+  const [peopleByProject, setPeopleByProject] = useState<
+    Record<string, PlanningPerson[]>
+  >({});
+  const [peopleError, setPeopleError] = useState("");
+  const peopleRequested = useRef(new Set<string>());
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [taskViewing, setTaskViewing] = useState(false);
   const [checkedItems, setCheckedItems] = useState<string[]>([]);
@@ -556,6 +562,61 @@ export default function Dashboard() {
   );
   const taskIds = new Set(tasks.map((task) => task.data.id));
   const attention = (data?.attention ?? []).filter((a) => taskIds.has(a.task));
+  const workspaceKey = data?.viewer.workspaceId ?? "main";
+  // The visible attention rows that still have nobody to act on them.
+  const assignableProjects = canWrite
+    ? Array.from(
+        new Set(
+          attention
+            .slice(0, attentionLimit)
+            .filter((a) => a.reasons.includes("담당자 미지정"))
+            .map((a) => tasks.find((t) => t.data.id === a.task)?.data.project)
+            .filter((id): id is string => !!id),
+        ),
+      ).sort()
+    : [];
+  const assignableKey = assignableProjects.join(",");
+  useEffect(() => {
+    if (!assignableKey) return;
+    const generation = accountGeneration.current;
+    for (const project of assignableKey.split(",")) {
+      const key = `${workspaceKey}:${project}`;
+      if (peopleRequested.current.has(key)) continue;
+      peopleRequested.current.add(key);
+      void api(
+        `planning/people?${new URLSearchParams({ project, limit: "100" })}`,
+      )
+        .then((result) => {
+          if (generation === accountGeneration.current)
+            setPeopleByProject((old) => ({ ...old, [key]: result.items }));
+        })
+        .catch((e) => {
+          // Let the next render retry; the row falls back to opening the task.
+          peopleRequested.current.delete(key);
+          if (generation === accountGeneration.current)
+            setPeopleError((e as Error).message);
+        });
+    }
+  }, [assignableKey, workspaceKey]);
+  async function assignTask(task: Stored<Task>, person: PlanningPerson) {
+    setNotice("");
+    await act(async () => {
+      const saved = await api("tasks", {
+        data: {
+          ...task.data,
+          assignee: person.githubLogin ?? person.login,
+          assigneeUserId: person.id,
+        },
+        revision: task.revision,
+      });
+      setEditing((current) =>
+        current?.data.id === task.data.id ? saved : current,
+      );
+      setNotice(
+        `${task.data.title}: 담당자를 ${person.displayName}님으로 지정했습니다.`,
+      );
+    });
+  }
   const destinations: ReturnType<typeof activityDestinations> = data
     ? activityDestinations(data)
     : new Map();
@@ -1569,31 +1630,81 @@ export default function Dashboard() {
                         </div>
                         <div className="attention-list">
                           {attention.length ? (
-                            attention.slice(0, attentionLimit).map((a) => (
-                              <button
-                                key={a.task}
-                                className="attention-row"
-                                onClick={() =>
-                                  openTask(
-                                    tasks.find((t) => t.data.id === a.task)!,
-                                  )
-                                }
-                              >
-                                <span className="warning-dot">!</span>
-                                <div>
-                                  <strong>{a.title}</strong>
-                                  <small>{a.reasons.join(" · ")}</small>
+                            attention.slice(0, attentionLimit).map((a) => {
+                              const row = tasks.find(
+                                (t) => t.data.id === a.task,
+                              )!;
+                              const people =
+                                peopleByProject[
+                                  `${workspaceKey}:${row.data.project}`
+                                ];
+                              return (
+                                <div key={a.task} className="attention-row">
+                                  <button
+                                    className="attention-open"
+                                    onClick={() => openTask(row)}
+                                  >
+                                    <span
+                                      className="warning-dot"
+                                      aria-hidden="true"
+                                    >
+                                      !
+                                    </span>
+                                    <div>
+                                      <strong>{a.title}</strong>
+                                      <small>{a.reasons.join(" · ")}</small>
+                                    </div>
+                                    <code>{a.task}</code>
+                                    <span className="arrow">상세 보기 ›</span>
+                                  </button>
+                                  {canWrite &&
+                                    a.reasons.includes("담당자 미지정") && (
+                                      <label className="attention-assign">
+                                        <span className="sr-only">
+                                          {a.title} 담당자 지정
+                                        </span>
+                                        <select
+                                          value=""
+                                          disabled={busy || !people?.length}
+                                          onChange={(e) => {
+                                            const person = people?.find(
+                                              (p) => p.id === e.target.value,
+                                            );
+                                            if (person)
+                                              void assignTask(row, person);
+                                          }}
+                                        >
+                                          <option value="">
+                                            {!people
+                                              ? "구성원 확인 중"
+                                              : people.length
+                                                ? "담당자 지정"
+                                                : "지정할 구성원 없음"}
+                                          </option>
+                                          {(people ?? []).map((p) => (
+                                            <option key={p.id} value={p.id}>
+                                              {p.displayName} · @
+                                              {p.githubLogin ?? p.login}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                    )}
                                 </div>
-                                <code>{a.task}</code>
-                                <span className="arrow">상세 보기 ›</span>
-                              </button>
-                            ))
+                              );
+                            })
                           ) : (
                             <div className="empty small">
                               확인이 필요한 작업이 없습니다.
                             </div>
                           )}
                         </div>
+                        {peopleError && assignableKey && (
+                          <small className="attention-note" role="alert">
+                            구성원 목록을 불러오지 못해 담당자 지정을 쓸 수
+                            없습니다: {peopleError}
+                          </small>
+                        )}
                         {attention.length > attentionLimit && (
                           <button
                             className="button secondary"

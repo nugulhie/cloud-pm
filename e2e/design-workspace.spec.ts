@@ -252,3 +252,69 @@ test("모바일 워크스페이스 창의 Esc는 먼저 창을 닫고 메뉴를 
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await expect(trigger).toBeFocused();
 });
+
+test("확인이 필요한 작업에서 상세를 열지 않고 담당자를 지정한다", async ({
+  page,
+}) => {
+  const member = {
+    id: "11111111-1111-4111-8111-111111111111",
+    login: "jiwon",
+    displayName: "김지원",
+    githubLogin: "jiwon-kim",
+    githubId: null,
+    role: "write",
+  };
+  let task: any;
+  let saved: any = null;
+  await page.route("**/api/dashboard", async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    task ??= {
+      ...data.tasks[0],
+      data: {
+        ...data.tasks[0].data,
+        id: "design-unassigned",
+        title: "담당자 없는 출시 점검",
+        assignee: "",
+        assigneeUserId: null,
+        status: "in_progress",
+        blockedReason: "",
+      },
+      revision: 2,
+    };
+    data.tasks = [task];
+    data.attention = task.data.assignee
+      ? []
+      : [
+          {
+            task: task.data.id,
+            title: task.data.title,
+            reasons: ["담당자 미지정"],
+          },
+        ];
+    await route.fulfill({ response, json: data });
+  });
+  await page.route("**/api/planning/people**", (route) =>
+    route.fulfill({ json: { items: [member], nextOffset: null } }),
+  );
+  await page.route("**/api/tasks", async (route) => {
+    saved = route.request().postDataJSON();
+    task = { ...task, data: saved.data, revision: task.revision + 1 };
+    await route.fulfill({ json: task });
+  });
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "확인이 필요한 작업" });
+  const picker = attention.getByRole("combobox", {
+    name: "담당자 없는 출시 점검 담당자 지정",
+    exact: true,
+  });
+  await expect(picker).toBeEnabled({ timeout: 30000 });
+  await picker.selectOption({ label: "김지원 · @jiwon-kim" });
+  // Assigning clears the row in place; the detail panel never opens.
+  await expect(attention).toContainText("확인이 필요한 작업이 없습니다.");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(saved.revision).toBe(2);
+  expect(saved.data.assignee).toBe("jiwon-kim");
+  expect(saved.data.assigneeUserId).toBe(member.id);
+  expect(saved.data.title).toBe("담당자 없는 출시 점검");
+});

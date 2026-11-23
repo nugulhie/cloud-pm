@@ -813,9 +813,10 @@ footer > span:last-child {
   margin-left: auto;
 }
 .alert {
-  background: #fff5ee;
-  color: #ad674c;
-  border: 1px solid #f0d8c8;
+  background: var(--danger-soft);
+  color: var(--danger);
+  /* Mixed from the token so the border needs no hex of its own. */
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--surface));
   padding: 12px 16px;
   border-radius: var(--radius-md);
   font-size: 12px;
