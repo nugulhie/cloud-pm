@@ -310,11 +310,87 @@ test("확인이 필요한 작업에서 상세를 열지 않고 담당자를 지�
   });
   await expect(picker).toBeEnabled({ timeout: 30000 });
   await picker.selectOption({ label: "김지원 · @jiwon-kim" });
-  // Assigning clears the row in place; the detail panel never opens.
-  await expect(attention).toContainText("확인이 필요한 작업이 없습니다.");
+  // The answer stays in the row that asked, and the detail panel never opens.
+  const settledRow = attention.locator(".attention-settled");
+  await expect(settledRow).toContainText("담당자 없는 출시 점검");
+  await expect(settledRow).toContainText("담당자 지정: 김지원 · @jiwon-kim");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(saved.revision).toBe(2);
   expect(saved.data.assignee).toBe("jiwon-kim");
   expect(saved.data.assigneeUserId).toBe(member.id);
   expect(saved.data.title).toBe("담당자 없는 출시 점검");
+  // Undo restores the previous owner at the task's current revision.
+  const undo = settledRow.getByRole("button", {
+    name: "되돌리기",
+    exact: true,
+  });
+  await expect(undo).toBeFocused();
+  await undo.click();
+  await expect(settledRow).toHaveCount(0);
+  await expect(picker).toBeEnabled();
+  expect(saved.revision).toBe(3);
+  expect(saved.data.assignee).toBe("");
+  expect(saved.data.assigneeUserId).toBe(null);
+});
+
+test("서비스 계정이 없는 워크스페이스는 GitHub 담당자로 지정한다", async ({
+  page,
+}) => {
+  let task: any;
+  let saved: any = null;
+  await page.route("**/api/dashboard", async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    task ??= {
+      ...data.tasks[0],
+      data: {
+        ...data.tasks[0].data,
+        id: "design-github-only",
+        title: "외주 연동 점검",
+        assignee: "",
+        assigneeUserId: null,
+        status: "ready",
+        blockedReason: "",
+      },
+      revision: 5,
+    };
+    data.tasks = [task];
+    data.attention = task.data.assignee
+      ? []
+      : [
+          {
+            task: task.data.id,
+            title: task.data.title,
+            reasons: ["담당자 미지정"],
+          },
+        ];
+    await route.fulfill({ response, json: data });
+  });
+  // No service accounts yet: the queue must still be usable.
+  await page.route("**/api/planning/people**", (route) =>
+    route.fulfill({ json: { items: [], nextOffset: null } }),
+  );
+  await page.route("**/api/github/assignees**", (route) =>
+    route.fulfill({
+      json: { users: [{ login: "octo-dev", repositories: [] }] },
+    }),
+  );
+  await page.route("**/api/tasks", async (route) => {
+    saved = route.request().postDataJSON();
+    task = { ...task, data: saved.data, revision: task.revision + 1 };
+    await route.fulfill({ json: task });
+  });
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "확인이 필요한 작업" });
+  const picker = attention.getByRole("combobox", {
+    name: "외주 연동 점검 담당자 지정",
+    exact: true,
+  });
+  await expect(picker).toBeEnabled({ timeout: 30000 });
+  await picker.selectOption({ label: "@octo-dev · GitHub" });
+  await expect(attention.locator(".attention-settled")).toContainText(
+    "담당자 지정: @octo-dev · GitHub",
+  );
+  expect(saved.data.assignee).toBe("octo-dev");
+  expect(saved.data.assigneeUserId).toBe(null);
 });

@@ -52,6 +52,22 @@ import type { SyncJob } from "../jobs/queue";
 import type { Service } from "../core/service";
 import type { Task, Project, Feature, Stored, GitHubItem } from "../core/model";
 type Data = Awaited<ReturnType<Service["dashboard"]>>;
+// Someone the queue can hand a task to. Service accounts come first; a
+// workspace with none offers the repository's GitHub users instead, which is
+// the same fallback the task form uses.
+type AssignCandidate = {
+  key: string;
+  label: string;
+  assignee: string;
+  assigneeUserId: string | null;
+};
+// What an owner assignment has to remember to be reversible in place.
+type SettledAssignment = {
+  title: string;
+  label: string;
+  previousAssignee: string;
+  previousUserId: string | null;
+};
 class ApiError extends Error {
   constructor(
     message: string,
@@ -154,12 +170,25 @@ export default function Dashboard() {
   const [activityLimit, setActivityLimit] = useState(40);
   const [overviewLimit, setOverviewLimit] = useState(6);
   const [attentionLimit, setAttentionLimit] = useState(5);
-  // Member lists for inline assignment, keyed by workspace and project.
-  const [peopleByProject, setPeopleByProject] = useState<
-    Record<string, PlanningPerson[]>
+  // Candidates for inline assignment, keyed by workspace and project.
+  const [candidatesByProject, setCandidatesByProject] = useState<
+    Record<string, AssignCandidate[]>
   >({});
   const [peopleError, setPeopleError] = useState("");
   const peopleRequested = useRef(new Set<string>());
+  // Assignments awaiting their undo window, keyed by task id.
+  const [settled, setSettled] = useState<Record<string, SettledAssignment>>({});
+  const [lastSettled, setLastSettled] = useState("");
+  const settleTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const undoRef = useRef<HTMLButtonElement | null>(null);
+  const undoFocused = useRef("");
+  useEffect(() => {
+    const timers = settleTimers.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [taskViewing, setTaskViewing] = useState(false);
   const [checkedItems, setCheckedItems] = useState<string[]>([]);
@@ -173,6 +202,8 @@ export default function Dashboard() {
   const accountGeneration = useRef(0);
   const [data, setData] = useState<Data | null>(null),
     [error, setError] = useState(""),
+    // Only what this dialog's own submit produced.
+    [formError, setFormError] = useState(""),
     [busy, setBusy] = useState(false),
     [tab, setTab] = useState(tabs[0]),
     [token, setToken] = useState(""),
@@ -332,9 +363,12 @@ export default function Dashboard() {
         try {
           const migration = await api("work-items/migrate", {});
           if (migration.created) next = await api("dashboard");
-        } catch (error) {
+        } catch (migrationError) {
+          // Housekeeping nobody asked for. The dashboard already loaded, so a
+          // failure here is not the reader's error: retry on the next load and
+          // keep it out of the banner that reports their own actions.
           migratedWorkspaces.current.delete(workspace);
-          throw error;
+          console.error("work_items_migration_failed", migrationError);
         }
       }
       if (generation !== accountGeneration.current) return;
@@ -475,16 +509,21 @@ export default function Dashboard() {
       clearInterval(timer);
     };
   }, [ready, modal, selected, tab, profileOpen, boardDragging, deleting]);
+  // A failure belongs where the reader caused it: inside the open dialog, or
+  // in the page banner when none is open. The page banner is hidden while a
+  // dialog is up, so routing by context is what keeps errors visible at all.
   async function act(fn: () => Promise<unknown>) {
     const generation = accountGeneration.current;
+    const report = modal ? setFormError : setError;
     setBusy(true);
     setError("");
+    setFormError("");
     try {
       await fn();
       if (generation === accountGeneration.current) await load();
     } catch (e) {
       if (generation === accountGeneration.current)
-        setError((e as Error).message);
+        report((e as Error).message);
     } finally {
       if (generation === accountGeneration.current) setBusy(false);
     }
@@ -586,9 +625,33 @@ export default function Dashboard() {
       void api(
         `planning/people?${new URLSearchParams({ project, limit: "100" })}`,
       )
-        .then((result) => {
+        .then(async (result): Promise<AssignCandidate[]> => {
+          const members: PlanningPerson[] = result.items ?? [];
+          if (members.length)
+            return members.map((m) => ({
+              key: m.id,
+              label: `${m.displayName} · @${m.githubLogin ?? m.login}`,
+              assignee: m.githubLogin ?? m.login,
+              assigneeUserId: m.id,
+            }));
+          // No service accounts in this workspace yet, so offer the project's
+          // GitHub users rather than a control nobody can use.
+          const github = await api(
+            `github/assignees?${new URLSearchParams({ project })}`,
+          );
+          const users: { login: string }[] = Array.isArray(github.users)
+            ? github.users
+            : [];
+          return users.map((u) => ({
+            key: `github:${u.login}`,
+            label: `@${u.login} · GitHub`,
+            assignee: u.login,
+            assigneeUserId: null,
+          }));
+        })
+        .then((candidates) => {
           if (generation === accountGeneration.current)
-            setPeopleByProject((old) => ({ ...old, [key]: result.items }));
+            setCandidatesByProject((old) => ({ ...old, [key]: candidates }));
         })
         .catch((e) => {
           // Let the next render retry; the row falls back to opening the task.
@@ -598,23 +661,86 @@ export default function Dashboard() {
         });
     }
   }, [assignableKey, workspaceKey]);
-  async function assignTask(task: Stored<Task>, person: PlanningPerson) {
+  // A closed dialog keeps no failure, so reopening it starts clean.
+  useEffect(() => {
+    if (!modal) setFormError("");
+  }, [modal]);
+  // The row the reader just acted on keeps the keyboard, on its undo. The
+  // button is disabled while the save runs, so wait for it to settle, and
+  // move the focus only once per assignment.
+  useEffect(() => {
+    if (!lastSettled || busy || undoFocused.current === lastSettled) return;
+    undoFocused.current = lastSettled;
+    undoRef.current?.focus();
+  }, [lastSettled, busy]);
+  // An assignment answers in the row it was made in, and stays reversible
+  // there, so the reader never scrolls away to learn whether it took.
+  function settleAssignment(id: string, entry: SettledAssignment) {
+    setSettled((old) => ({ ...old, [id]: entry }));
+    setLastSettled(id);
+    const timers = settleTimers.current;
+    clearTimeout(timers.get(id));
+    timers.set(
+      id,
+      setTimeout(() => {
+        timers.delete(id);
+        setSettled(({ [id]: _done, ...rest }) => rest);
+      }, 10000),
+    );
+  }
+  function forgetAssignment(id: string) {
+    clearTimeout(settleTimers.current.get(id));
+    settleTimers.current.delete(id);
+    setSettled(({ [id]: _done, ...rest }) => rest);
+    setLastSettled((current) => (current === id ? "" : current));
+  }
+  async function assignTask(task: Stored<Task>, candidate: AssignCandidate) {
     setNotice("");
     await act(async () => {
       const saved = await api("tasks", {
         data: {
           ...task.data,
-          assignee: person.githubLogin ?? person.login,
-          assigneeUserId: person.id,
+          assignee: candidate.assignee,
+          assigneeUserId: candidate.assigneeUserId,
         },
         revision: task.revision,
       });
       setEditing((current) =>
         current?.data.id === task.data.id ? saved : current,
       );
+      settleAssignment(task.data.id, {
+        title: task.data.title,
+        label: candidate.label,
+        previousAssignee: task.data.assignee,
+        previousUserId: task.data.assigneeUserId ?? null,
+      });
       setNotice(
-        `${task.data.title}: 담당자를 ${person.displayName}님으로 지정했습니다.`,
+        `${task.data.title}: 담당자를 지정했습니다 (${candidate.label}). 되돌리기 버튼으로 취소할 수 있습니다.`,
       );
+    });
+  }
+  async function undoAssignment(id: string) {
+    const entry = settled[id];
+    if (!entry) return;
+    forgetAssignment(id);
+    setNotice("");
+    await act(async () => {
+      // Read the current revision so undo never fights a newer save.
+      const current = (data?.tasks ?? []).find((t) => t.data.id === id);
+      if (!current)
+        throw new Error(
+          `${entry.title}: 되돌릴 태스크를 찾을 수 없습니다. 태스크 보드에서 확인해 주세요.`,
+        );
+      const saved = await api("tasks", {
+        data: {
+          ...current.data,
+          assignee: entry.previousAssignee,
+          assigneeUserId: entry.previousUserId,
+        },
+        revision: current.revision,
+      });
+      setEditing((row) => (row?.data.id === id ? saved : row));
+      setNotice(`${entry.title}: 담당자 지정을 되돌렸습니다.`);
     });
   }
   const destinations: ReturnType<typeof activityDestinations> = data
@@ -1629,13 +1755,35 @@ export default function Dashboard() {
                           <span className="muted">다음 행동이 필요한 작업</span>
                         </div>
                         <div className="attention-list">
+                          {Object.entries(settled).map(([id, entry]) => (
+                            <div
+                              key={`settled-${id}`}
+                              className="attention-row attention-settled"
+                            >
+                              <span className="settled-dot" aria-hidden="true">
+                                ✓
+                              </span>
+                              <div>
+                                <strong>{entry.title}</strong>
+                                <small>담당자 지정: {entry.label}</small>
+                              </div>
+                              <button
+                                className="button secondary attention-undo"
+                                disabled={busy}
+                                ref={id === lastSettled ? undoRef : undefined}
+                                onClick={() => void undoAssignment(id)}
+                              >
+                                되돌리기
+                              </button>
+                            </div>
+                          ))}
                           {attention.length ? (
                             attention.slice(0, attentionLimit).map((a) => {
                               const row = tasks.find(
                                 (t) => t.data.id === a.task,
                               )!;
-                              const people =
-                                peopleByProject[
+                              const candidates =
+                                candidatesByProject[
                                   `${workspaceKey}:${row.data.project}`
                                 ];
                               return (
@@ -1665,26 +1813,25 @@ export default function Dashboard() {
                                         </span>
                                         <select
                                           value=""
-                                          disabled={busy || !people?.length}
+                                          disabled={busy || !candidates?.length}
                                           onChange={(e) => {
-                                            const person = people?.find(
-                                              (p) => p.id === e.target.value,
+                                            const picked = candidates?.find(
+                                              (c) => c.key === e.target.value,
                                             );
-                                            if (person)
-                                              void assignTask(row, person);
+                                            if (picked)
+                                              void assignTask(row, picked);
                                           }}
                                         >
                                           <option value="">
-                                            {!people
-                                              ? "구성원 확인 중"
-                                              : people.length
+                                            {!candidates
+                                              ? "담당자 확인 중"
+                                              : candidates.length
                                                 ? "담당자 지정"
-                                                : "지정할 구성원 없음"}
+                                                : "지정할 담당자 없음"}
                                           </option>
-                                          {(people ?? []).map((p) => (
-                                            <option key={p.id} value={p.id}>
-                                              {p.displayName} · @
-                                              {p.githubLogin ?? p.login}
+                                          {(candidates ?? []).map((c) => (
+                                            <option key={c.key} value={c.key}>
+                                              {c.label}
                                             </option>
                                           ))}
                                         </select>
@@ -1693,7 +1840,7 @@ export default function Dashboard() {
                                 </div>
                               );
                             })
-                          ) : (
+                          ) : Object.keys(settled).length ? null : (
                             <div className="empty small">
                               확인이 필요한 작업이 없습니다.
                             </div>
@@ -1701,21 +1848,29 @@ export default function Dashboard() {
                         </div>
                         {peopleError && assignableKey && (
                           <small className="attention-note" role="alert">
-                            구성원 목록을 불러오지 못해 담당자 지정을 쓸 수
-                            없습니다: {peopleError}
+                            담당자 목록을 불러오지 못해 지정을 쓸 수 없습니다:{" "}
+                            {peopleError}
                           </small>
                         )}
                         {attention.length > attentionLimit && (
-                          <button
-                            className="button secondary"
-                            onClick={() =>
-                              setAttentionLimit(attentionLimit + 5)
-                            }
-                          >
-                            확인 필요 태스크 보드에서 전체 보기 (
-                            {Math.min(attentionLimit, attention.length)} /{" "}
-                            {attention.length})
-                          </button>
+                          <div className="attention-more">
+                            <button
+                              className="button secondary"
+                              onClick={() =>
+                                setAttentionLimit(attentionLimit + 5)
+                              }
+                            >
+                              확인 필요 작업{" "}
+                              {Math.min(5, attention.length - attentionLimit)}개
+                              더 보기 ({attentionLimit} / {attention.length})
+                            </button>
+                            <button
+                              className="button secondary"
+                              onClick={() => setTab(tabs[1])}
+                            >
+                              태스크 보드에서 전체 보기
+                            </button>
+                          </div>
                         )}
                       </section>
                     </div>
@@ -2562,9 +2717,15 @@ export default function Dashboard() {
                     ×
                   </button>
                 </div>
-                {error && (
+                {formError && (
                   <div role="alert" className="alert">
-                    {error}
+                    {formError}
+                    <button
+                      aria-label="오류 닫기"
+                      onClick={() => setFormError("")}
+                    >
+                      ×
+                    </button>
                   </div>
                 )}
                 {modal === "project" ? (

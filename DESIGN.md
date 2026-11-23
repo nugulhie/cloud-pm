@@ -154,7 +154,7 @@ components:
 
 ### Primary
 
-- **Soldoc Blue** (`soldoc-blue`): 공식 로고의 파랑. 입력 초점 테두리, 초점 링(40% 투명), 사이드바 활성 항목의 배경 틴트에 쓴다. 흰 글자를 올리는 면에는 대비가 부족하므로 쓰지 않는다.
+- **Soldoc Blue** (`soldoc-blue`): 공식 로고의 파랑. 입력 초점 테두리와 사이드바 활성 항목의 배경 틴트에 쓴다. 흰 글자를 올리는 면에는 대비가 부족하므로 쓰지 않는다. 초점 링은 이 값이 아니라 Action Blue를 쓴다(캔버스 위 4.81:1).
 - **Action Blue** (`action-blue`): 흰 글자를 올리는 주요 버튼, 텍스트 버튼, 선택된 보기 전환에 쓴다. 호버 시 **Action Blue Deep**(`action-blue-deep`)으로 짙어진다.
 - **Blue Wash** (`blue-wash`): 안내 배너·초안 알림·선택 행의 옅은 배경.
 
@@ -244,7 +244,7 @@ components:
 
 - **Shape:** 살짝 둥근 모서리(6px), 높이 40px.
 - **Primary:** Action Blue 면에 흰 글자, Label 서체, 10px 16px 안쪽 여백. 화면의 핵심 행동 하나에만 쓴다.
-- **Hover / Focus:** 호버 시 Action Blue Deep으로 0.15초 전환. 초점은 3px Soldoc Blue 40% 외곽선, 3px 간격.
+- **Hover / Focus:** 호버 시 Action Blue Deep으로 0.15초 전환. 초점은 2px Action Blue 실선 외곽선, 2px 간격. 투명한 링은 쓰지 않는다 — 캔버스 위에서 3:1을 넘지 못한다.
 - **Secondary:** 흰 면, Control Line 테두리, Ink 글자. 호버 시 옅은 파랑 배경.
 - **Danger:** 흰 면, 빨강 글자, 옅은 빨강 테두리. 호버 시 Danger Wash.
 - **Text button:** 테두리 없이 Action Blue 글자. 패널 머리의 보조 행동(관리·추가)에 쓴다.
@@ -287,7 +287,7 @@ components:
 - **Do** 개입이 필요한 항목(차단·지연·미할당·검수 대기)에만 Attention Amber와 Signal Orange를 쓴다.
 - **Do** 목록은 행 목록·표로 만들고 열을 의미 단위로 정렬한다.
 - **Do** 호버와 선택은 배경 톤·테두리 색으로 표현하고 0.15초 안에 전환한다.
-- **Do** 모든 조작 요소에 Soldoc Blue 초점 외곽선을 보장한다.
+- **Do** 모든 조작 요소에 Action Blue 초점 외곽선을 보장한다. 네이비 사이드바 안에서만 밝은 파랑으로 바꾼다.
 
 ### Don't:
 

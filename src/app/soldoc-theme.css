@@ -1412,7 +1412,7 @@ button[aria-pressed="true"]:not(.nav),
   gap: 10px;
 }
 .overview-work-lists .attention-row strong {
-  color: #27455e;
+  color: var(--heading);
   font-size: 13px;
 }
 .overview-work-lists .attention-row small {
@@ -1432,8 +1432,8 @@ button[aria-pressed="true"]:not(.nav),
   flex: 0 0 auto;
   width: 23px;
   height: 23px;
-  background: #fff0e2;
-  color: #9d581e;
+  background: var(--attention-soft);
+  color: var(--attention);
   font-size: 12px;
 }
 /* One ledger line: the task opens on the left, its owner is set in place. */
@@ -1454,7 +1454,9 @@ button[aria-pressed="true"]:not(.nav),
 }
 .attention-row .attention-assign select {
   max-width: 168px;
-  padding: 5px 7px;
+  /* Controls stand at the system height, the same as every other input. */
+  height: var(--control-height);
+  padding: 0 8px;
   border: 1px solid var(--control-line);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -1464,6 +1466,44 @@ button[aria-pressed="true"]:not(.nav),
 .attention-row .attention-assign select:disabled {
   background: var(--bg);
   color: var(--muted);
+}
+/* The assignment answers where it was made, and stays reversible there. */
+.attention-row.attention-settled {
+  background: var(--done-soft);
+}
+.attention-settled .settled-dot {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--done);
+  font-size: 12px;
+}
+.attention-settled > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.attention-settled strong {
+  color: var(--heading);
+  font-size: 13px;
+}
+.attention-settled small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.attention-settled .attention-undo {
+  flex: 0 0 auto;
+  height: var(--control-height);
+}
+.overview-attention .attention-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .overview-attention .attention-note {
   display: block;
@@ -1580,9 +1620,19 @@ button[aria-pressed="true"]:not(.nav),
   .overview-work-lists .attention-row .attention-assign {
     flex: 1 1 100%;
   }
+  /* Touch targets clear 44px where a thumb is the pointer. */
   .overview-work-lists .attention-row .attention-assign select {
     width: 100%;
     max-width: none;
+    height: 44px;
+  }
+  .overview-work-lists .attention-settled .attention-undo {
+    flex: 1 1 100%;
+    height: 44px;
+  }
+  .overview-attention .attention-more button {
+    flex: 1 1 100%;
+    min-height: 44px;
   }
   .overview-task-list .overview-task-row {
     padding: 13px;
