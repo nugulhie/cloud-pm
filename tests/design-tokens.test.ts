@@ -50,8 +50,8 @@ test("12px보다 작은 글자는 없다", () => {
 // about. There are still many, so this holds the line rather than drawing it:
 // lower the baseline when you remove some, and never raise it.
 const hexBaseline: Record<string, number> = {
-  "src/app/globals.css": 260,
-  "src/app/soldoc-theme.css": 130,
+  "src/app/globals.css": 250,
+  "src/app/soldoc-theme.css": 127,
 };
 
 test("토큰 블록 밖의 hex 색상 수는 늘지 않는다", () => {

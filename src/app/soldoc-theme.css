@@ -524,10 +524,10 @@ textarea:focus {
 .demo-banner {
   margin: 12px 0 16px;
   padding: 8px 12px;
-  border: 1px solid #d5e7f5;
+  border: 1px solid color-mix(in srgb, var(--info) 22%, var(--surface));
   border-radius: var(--radius-sm);
-  background: #eef6fc;
-  color: #45677f;
+  background: var(--info-soft);
+  color: var(--info);
   font-size: 12px;
 }
 .connection-bar {

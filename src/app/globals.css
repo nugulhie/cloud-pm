@@ -1210,25 +1210,26 @@ label textarea {
   font-size: 12px;
 }
 
+/* Status chips are read, so each pair is a token pair that clears AA. */
 .job-status {
   font-size: 12px;
   border-radius: var(--radius-md);
   padding: 5px 8px;
-  background: #eef1f5;
-  color: #788495;
+  background: var(--bg);
+  color: var(--muted);
   white-space: nowrap;
 }
 .job-status.completed {
-  background: #edf6f0;
-  color: #368168;
+  background: var(--done-soft);
+  color: var(--done);
 }
 .job-status.failed {
-  background: #fff0e9;
-  color: #b06c50;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .job-status.running {
-  background: #edf3ff;
-  color: #638cb5;
+  background: var(--info-soft);
+  color: var(--info);
 }
 .job-error {
   white-space: pre-wrap;
@@ -2588,8 +2589,8 @@ form.management-form {
 }
 .task-list th {
   padding: 14px 16px;
-  background: #f1f5f3;
-  color: #667487;
+  background: var(--bg);
+  color: var(--muted);
   white-space: nowrap;
   font-weight: 500;
 }
