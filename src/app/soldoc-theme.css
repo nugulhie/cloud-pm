@@ -17,7 +17,7 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  font-size: 13px;
+  font-size: 12px;
 }
 .draft-status {
   font-size: 12px;
@@ -71,7 +71,7 @@ body {
 }
 .workflow-card details > summary {
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   margin: 10px 0;
 }
 .workflow-card details {
@@ -82,7 +82,7 @@ body {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 13px;
+  font-size: 12px;
 }
 .workflow-diff th,
 .workflow-diff td {
@@ -117,7 +117,7 @@ body {
 .account-recovery label {
   display: grid;
   gap: 5px;
-  font-size: 13px;
+  font-size: 12px;
   min-width: 0;
 }
 .workflow-panel label.checkbox {
@@ -148,7 +148,7 @@ body {
   color: var(--muted);
 }
 .pm-summary-counts strong {
-  font-size: 26px;
+  font-size: 29px;
   color: var(--navy);
 }
 .account-recovery {
@@ -696,7 +696,7 @@ textarea:focus {
   font-size: 12px;
 }
 .project-ledger-row .project-progress-label strong {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   color: #1e638f;
   font-variant-numeric: tabular-nums;
@@ -897,7 +897,7 @@ textarea:focus {
   font-weight: 600;
 }
 .briefing p {
-  font-size: 13px;
+  font-size: 14px;
   color: #2d4e66;
 }
 .briefing small {
@@ -1117,7 +1117,7 @@ button[aria-pressed="true"]:not(.nav),
   }
   .brand-product {
     padding-left: 8px;
-    font-size: 13px;
+    font-size: 12px;
   }
   .shell > main {
     margin-left: 212px;
@@ -1202,14 +1202,14 @@ button[aria-pressed="true"]:not(.nav),
     gap: 3px;
   }
   .content {
-    padding: 22px 16px 28px;
+    padding: 16px 16px 28px;
   }
   .page-heading {
     gap: 14px;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
   }
   .page-heading h1 {
-    font-size: 25px;
+    font-size: 21px;
     letter-spacing: -0.8px;
   }
   .page-heading h1::before {
@@ -1231,7 +1231,7 @@ button[aria-pressed="true"]:not(.nav),
   .filters {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding-bottom: 16px;
+    padding-bottom: 10px;
     gap: 8px;
   }
   .filters select,
@@ -1239,14 +1239,16 @@ button[aria-pressed="true"]:not(.nav),
     width: 100%;
     max-width: none;
     min-width: 0;
-    font-size: 13px;
+    font-size: 12px;
   }
   .filters .search {
     min-width: 0;
   }
+  /* The taller touch targets below buy their room back from the gaps above,
+     so the first row of work still lands on the first screen. */
   .task-page .saved-views-bar {
-    padding: 10px 12px;
-    margin-bottom: 12px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
   }
   .saved-views-bar > .planning-toolbar {
     display: grid;
@@ -1263,7 +1265,7 @@ button[aria-pressed="true"]:not(.nav),
     min-width: 0;
     min-height: 34px;
     padding: 6px;
-    font-size: 13px;
+    font-size: 12px;
   }
   .saved-views-bar > .planning-toolbar button {
     min-height: 34px;
@@ -1345,7 +1347,7 @@ button[aria-pressed="true"]:not(.nav),
     padding-left: 0;
   }
   .stats .stat > strong {
-    font-size: 27px;
+    font-size: 29px;
   }
   .stats .stat p {
     font-size: 12px;
@@ -1413,7 +1415,7 @@ button[aria-pressed="true"]:not(.nav),
 }
 .overview-work-lists .attention-row strong {
   color: var(--heading);
-  font-size: 13px;
+  font-size: 14px;
 }
 .overview-work-lists .attention-row small {
   font-size: 12px;
@@ -1435,6 +1437,28 @@ button[aria-pressed="true"]:not(.nav),
   background: var(--attention-soft);
   color: var(--attention);
   font-size: 12px;
+}
+/* Out of the way until the keyboard needs it, then the first thing it finds. */
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 60;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-menu);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  transform: translateY(-250%);
+}
+.skip-link:focus {
+  transform: none;
+}
+#workspace-main:focus {
+  outline: none;
 }
 /* One ledger line: the task opens on the left, its owner is set in place. */
 .attention-row .attention-open {
@@ -1488,7 +1512,7 @@ button[aria-pressed="true"]:not(.nav),
 }
 .attention-settled strong {
   color: var(--heading);
-  font-size: 13px;
+  font-size: 14px;
 }
 .attention-settled small {
   display: block;
@@ -1499,6 +1523,25 @@ button[aria-pressed="true"]:not(.nav),
 .attention-settled .attention-undo {
   flex: 0 0 auto;
   height: var(--control-height);
+}
+.overview-attention .attention-bulk {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.overview-attention .attention-bulk select {
+  height: var(--control-height);
+  max-width: 320px;
+  padding: 0 8px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+}
+.overview-attention .attention-bulk select:disabled {
+  background: var(--bg);
+  color: var(--muted);
 }
 .overview-attention .attention-more {
   display: flex;
@@ -1569,7 +1612,7 @@ button[aria-pressed="true"]:not(.nav),
   min-height: 0;
   padding: 0;
   color: #245779;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.65;
   text-align: left;
@@ -1634,6 +1677,11 @@ button[aria-pressed="true"]:not(.nav),
     flex: 1 1 100%;
     min-height: 44px;
   }
+  .overview-attention .attention-bulk select {
+    width: 100%;
+    max-width: none;
+    height: 44px;
+  }
   .overview-task-list .overview-task-row {
     padding: 13px;
   }
@@ -1641,19 +1689,19 @@ button[aria-pressed="true"]:not(.nav),
 
 /* Brand actions and readable captions across the shared work surfaces. */
 .sidebar .nav {
-  font-size: 13px;
+  font-size: 12px;
 }
 .app-topbar .breadcrumb {
   font-size: 12px;
 }
 .page-heading p {
-  font-size: 13px;
+  font-size: 12px;
 }
 .project-overview-labels {
   font-size: 12px;
 }
 .project-ledger-row .project-goal {
-  font-size: 13px;
+  font-size: 12px;
 }
 .project-ledger-row .project-repositories,
 .project-ledger-row .project-people,
@@ -1698,10 +1746,6 @@ button[aria-pressed="true"]:not(.nav),
 .account-avatar {
   background: var(--brand-soft);
   color: var(--brand-strong);
-}
-.history-mark {
-  background: var(--brand-strong);
-  color: #fff;
 }
 .settings-navigation [role="tab"]:focus-visible,
 .settings-panel:focus-visible {
@@ -1833,4 +1877,56 @@ button[aria-pressed="true"]:not(.nav),
 }
 .timeline-bar.canceled {
   background: #798490;
+}
+
+/* Where a thumb is the pointer, every control clears 44px. This sits last so
+   it outranks the per-component heights tuned for a mouse. */
+@media (max-width: 720px) {
+  button,
+  select,
+  textarea,
+  summary,
+  [role="tab"],
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]) {
+    min-height: 44px;
+  }
+  .icon-button,
+  .navigation-trigger,
+  .navigation-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* Named explicitly where a component rule is more specific than `button`. */
+  .sidebar .nav,
+  .saved-views-bar > .planning-toolbar select,
+  .saved-views-bar > .planning-toolbar button,
+  .settings-navigation [role="tab"],
+  .task-view-toolbar .view-switch button,
+  .workflow-panel > .view-switch button,
+  .view-switch button,
+  .filters select,
+  .filters input,
+  .button,
+  .text-button,
+  .notification-trigger,
+  .hierarchy-add,
+  .hierarchy-toggle,
+  .task-state-select,
+  .task-list .list-status,
+  .page-heading .actions .button,
+  .task-hierarchy .hierarchy-add,
+  .overview-task-list h3 button,
+  .prd-table .text-button,
+  .prd-compact .prd-name .text-button,
+  .project-ledger-row .project-open,
+  .project-summary-details > summary,
+  .project-ledger-row .project-summary-details > summary,
+  .page-heading .actions .overview-tools > summary {
+    min-height: 44px;
+  }
+  /* The smallest target on the screen was the destructive one. */
+  .project-ledger-row .project-delete {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }

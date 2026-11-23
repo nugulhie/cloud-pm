@@ -87,6 +87,25 @@ const labels: Record<string, string> = {
   closed: "닫힘",
   merged: "머지 완료",
 };
+// Stable ASCII names for `?view=`, one per entry of `tabs` and in the same
+// order, so a menu can be bookmarked, shared and reached with the back button.
+const tabSlugs = [
+  "overview",
+  "tasks",
+  "github",
+  "history",
+  "jobs",
+  "manage",
+  "calendar",
+  "prd",
+  "policies",
+  "glossary",
+  "resources",
+  "backlog",
+  "assignees",
+  "releases",
+  "trash",
+];
 const tabs = [
   "프로젝트 현황",
   "태스크 보드",
@@ -104,6 +123,12 @@ const tabs = [
   "검토·릴리스",
   "휴지통",
 ];
+const tabForSlug = (slug: string | null) => {
+  const index = slug ? tabSlugs.indexOf(slug) : -1;
+  return index >= 0 ? tabs[index]! : tabs[0]!;
+};
+const slugForTab = (name: string) =>
+  tabSlugs[tabs.indexOf(name)] ?? tabSlugs[0]!;
 const tabDescriptions: Record<string, string> = {
   "프로젝트 현황": "차단·지연·미할당 작업과 프로젝트별 진행률을 확인하세요.",
   "태스크 보드":
@@ -176,6 +201,15 @@ export default function Dashboard() {
   >({});
   const [peopleError, setPeopleError] = useState("");
   const peopleRequested = useRef(new Set<string>());
+  // Opening a menu is a step in the browser's own history.
+  function openTab(name: string) {
+    setTab(name);
+    setNavigationOpen(false);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("view") === slugForTab(name)) return;
+    url.searchParams.set("view", slugForTab(name));
+    window.history.pushState(null, "", url.pathname + url.search + url.hash);
+  }
   // Assignments awaiting their undo window, keyed by task id.
   const [settled, setSettled] = useState<Record<string, SettledAssignment>>({});
   const [lastSettled, setLastSettled] = useState("");
@@ -205,7 +239,7 @@ export default function Dashboard() {
     // Only what this dialog's own submit produced.
     [formError, setFormError] = useState(""),
     [busy, setBusy] = useState(false),
-    [tab, setTab] = useState(tabs[0]),
+    [tab, setTab] = useState(tabs[0]!),
     [token, setToken] = useState(""),
     [ready, setReady] = useState(false);
   const [project, setProject] = useState(""),
@@ -478,6 +512,42 @@ export default function Dashboard() {
     setReady(true);
     void load();
   }, []);
+  // The menu lives in the address bar, so a screen can be bookmarked, sent to
+  // a colleague, and left with the browser's own back button. The URL is read
+  // on load and on back; it is written only by `openTab`, from a real click,
+  // so no effect can race the address the reader arrived with.
+  useEffect(() => {
+    const apply = () =>
+      setTab(
+        tabForSlug(new URL(window.location.href).searchParams.get("view")),
+      );
+    apply();
+    window.addEventListener("popstate", apply);
+    return () => window.removeEventListener("popstate", apply);
+  }, []);
+  // Two screens load their own data. Hanging that off the menu click left a
+  // bookmark or a back step showing an empty screen, so it follows the screen
+  // itself, however the reader got there.
+  useEffect(() => {
+    if (!ready || !data) return;
+    const generation = accountGeneration.current;
+    const path = tab === tabs[3] ? "history" : tab === tabs[4] ? "jobs" : "";
+    if (!path) return;
+    let active = true;
+    void api(path)
+      .then((result) => {
+        if (!active || generation !== accountGeneration.current) return;
+        if (path === "history") setHistory(result);
+        else setJobs(result);
+      })
+      .catch((e) => {
+        if (active && generation === accountGeneration.current)
+          setError((e as Error).message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tab, ready, !data]);
   useEffect(() => {
     if (!ready || modal || selected || profileOpen || boardDragging || deleting)
       return;
@@ -615,6 +685,18 @@ export default function Dashboard() {
       ).sort()
     : [];
   const assignableKey = assignableProjects.join(",");
+  // One picker for the whole queue, but only when every unowned row belongs to
+  // the same project: the candidate list is per project, so a single control
+  // across two of them would offer people who cannot take the work.
+  const unownedRows = attention
+    .slice(0, attentionLimit)
+    .filter((a) => a.reasons.includes("담당자 미지정"))
+    .flatMap((a) => tasks.filter((t) => t.data.id === a.task));
+  const bulkProject =
+    assignableProjects.length === 1 ? assignableProjects[0]! : "";
+  const bulkCandidates = bulkProject
+    ? candidatesByProject[`${workspaceKey}:${bulkProject}`]
+    : undefined;
   useEffect(() => {
     if (!assignableKey) return;
     const generation = accountGeneration.current;
@@ -716,6 +798,38 @@ export default function Dashboard() {
       });
       setNotice(
         `${task.data.title}: 담당자를 지정했습니다 (${candidate.label}). 되돌리기 버튼으로 취소할 수 있습니다.`,
+      );
+    });
+  }
+  async function assignManyTasks(
+    rows: Stored<Task>[],
+    candidate: AssignCandidate,
+  ) {
+    setNotice("");
+    await act(async () => {
+      // One at a time, each against its own revision, so a stale row fails
+      // on its own instead of taking the batch with it.
+      for (const row of rows) {
+        const saved = await api("tasks", {
+          data: {
+            ...row.data,
+            assignee: candidate.assignee,
+            assigneeUserId: candidate.assigneeUserId,
+          },
+          revision: row.revision,
+        });
+        setEditing((current) =>
+          current?.data.id === row.data.id ? saved : current,
+        );
+        settleAssignment(row.data.id, {
+          title: row.data.title,
+          label: candidate.label,
+          previousAssignee: row.data.assignee,
+          previousUserId: row.data.assigneeUserId ?? null,
+        });
+      }
+      setNotice(
+        `미할당 ${rows.length}건의 담당자를 지정했습니다 (${candidate.label}). 각 행의 되돌리기 버튼으로 취소할 수 있습니다.`,
       );
     });
   }
@@ -1131,6 +1245,10 @@ export default function Dashboard() {
       }
     >
       <div className="shell">
+        {/* First stop for the keyboard, so the 15-item menu is skippable. */}
+        <a className="skip-link" href="#workspace-main">
+          본문으로 건너뛰기
+        </a>
         <aside
           id="workspace-navigation"
           className={`sidebar${navigationOpen ? " sidebar-open" : ""}`}
@@ -1173,7 +1291,7 @@ export default function Dashboard() {
               setDeleteError("");
               setSelected(null);
               setModal(null);
-              setTab(tabs[0]);
+              openTab(tabs[0]!);
               await load();
               setNavigationOpen(false);
             }}
@@ -1196,14 +1314,10 @@ export default function Dashboard() {
                     aria-current={tab === tabs[i] ? "page" : undefined}
                     className={tab === tabs[i] ? "nav active" : "nav"}
                     onClick={() => {
-                      setTab(tabs[i]!);
+                      openTab(tabs[i]!);
                       setNavigationOpen(false);
                       resetFilters();
                       setNotice("");
-                      if (i === 4)
-                        void act(async () => setJobs(await api("jobs")));
-                      if (i === 3)
-                        void act(async () => setHistory(await api("history")));
                     }}
                   >
                     <NavigationIcon index={i} />
@@ -1245,7 +1359,11 @@ export default function Dashboard() {
             onClick={() => setNavigationOpen(false)}
           />
         )}
-        <main inert={navigationOpen || undefined}>
+        <main
+          id="workspace-main"
+          tabIndex={-1}
+          inert={navigationOpen || undefined}
+        >
           <header className="app-topbar">
             <button
               className="navigation-trigger icon-button"
@@ -1268,7 +1386,7 @@ export default function Dashboard() {
                   api={api}
                   onOpen={(id, destination) => {
                     if (destination === "jobs") {
-                      setTab(tabs[4]!);
+                      openTab(tabs[4]!);
                       void act(async () => setJobs(await api("jobs")));
                       return;
                     }
@@ -1287,7 +1405,7 @@ export default function Dashboard() {
                       setSummaryPeriod(
                         destination === "summary-week" ? "week" : "day",
                       );
-                      setTab(tabs[13]!);
+                      openTab(tabs[13]!);
                       return;
                     }
                     const task = data.tasks.find((t) => t.data.id === id);
@@ -1643,7 +1761,7 @@ export default function Dashboard() {
                     onManageProject={(id) => {
                       setProject(id);
                       setManagementKind("project");
-                      setTab(tabs[5]);
+                      openTab(tabs[5]!);
                     }}
                   />
                 )}
@@ -1703,7 +1821,7 @@ export default function Dashboard() {
                           workspace: data.viewer.workspaceId,
                           id,
                         });
-                        setTab("PRD 관리");
+                        openTab("PRD 관리");
                       }
                     }}
                   />
@@ -1754,6 +1872,43 @@ export default function Dashboard() {
                           </h2>
                           <span className="muted">다음 행동이 필요한 작업</span>
                         </div>
+                        {canWrite && unownedRows.length > 1 && (
+                          <div className="attention-bulk">
+                            {bulkProject ? (
+                              <label>
+                                <span className="sr-only">
+                                  미할당 {unownedRows.length}건 담당자 일괄 지정
+                                </span>
+                                <select
+                                  value=""
+                                  disabled={busy || !bulkCandidates?.length}
+                                  onChange={(e) => {
+                                    const picked = bulkCandidates?.find(
+                                      (c) => c.key === e.target.value,
+                                    );
+                                    if (picked)
+                                      void assignManyTasks(unownedRows, picked);
+                                  }}
+                                >
+                                  <option value="">
+                                    미할당 {unownedRows.length}건 모두 지정
+                                  </option>
+                                  {(bulkCandidates ?? []).map((c) => (
+                                    <option key={c.key} value={c.key}>
+                                      {c.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : (
+                              <span className="muted">
+                                미할당 {unownedRows.length}건이 여러 프로젝트에
+                                걸쳐 있습니다. 프로젝트를 하나 고르면 한 번에
+                                지정할 수 있습니다.
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <div className="attention-list">
                           {Object.entries(settled).map(([id, entry]) => (
                             <div
@@ -1866,7 +2021,7 @@ export default function Dashboard() {
                             </button>
                             <button
                               className="button secondary"
-                              onClick={() => setTab(tabs[1])}
+                              onClick={() => openTab(tabs[1]!)}
                             >
                               태스크 보드에서 전체 보기
                             </button>
@@ -1888,7 +2043,7 @@ export default function Dashboard() {
                       }}
                       onManage={() => {
                         setManagementKind("project");
-                        setTab(tabs[5]);
+                        openTab(tabs[5]!);
                       }}
                       onDelete={requestProjectDeletion}
                     />
@@ -1905,7 +2060,7 @@ export default function Dashboard() {
                               disabled={!canWrite}
                               onClick={() => {
                                 setManagementKind("task");
-                                setTab(tabs[5]);
+                                openTab(tabs[5]!);
                               }}
                             >
                               수정·삭제 관리
@@ -1970,7 +2125,7 @@ export default function Dashboard() {
                         {tasks.length > overviewLimit && (
                           <button
                             className="button secondary"
-                            onClick={() => setTab(tabs[1])}
+                            onClick={() => openTab(tabs[1]!)}
                           >
                             태스크 보드에서 전체 보기 (
                             {Math.min(overviewLimit, tasks.length)} /{" "}
@@ -2544,7 +2699,7 @@ export default function Dashboard() {
                     )}
                     onManage={() => {
                       setManagementKind("project");
-                      setTab(tabs[5]);
+                      openTab(tabs[5]!);
                     }}
                   />
                 )}
@@ -2747,7 +2902,7 @@ export default function Dashboard() {
                         setNotice(
                           "프로젝트를 만들었습니다. PRD를 작성하거나 작업을 추가해 보세요.",
                         );
-                        setTab(tabs[0]);
+                        openTab(tabs[0]!);
                         setModal(null);
                       });
                     }}

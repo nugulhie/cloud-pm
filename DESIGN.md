@@ -33,6 +33,18 @@ typography:
     fontWeight: 750
     lineHeight: 1.3
     letterSpacing: "-1.2px"
+  subhead:
+    fontFamily: "Pretendard, -apple-system, BlinkMacSystemFont, Apple SD Gothic Neo, Segoe UI, sans-serif"
+    fontSize: "21px"
+    fontWeight: 700
+    lineHeight: 1.35
+    letterSpacing: "-0.6px"
+  section:
+    fontFamily: "Pretendard, -apple-system, BlinkMacSystemFont, Apple SD Gothic Neo, Segoe UI, sans-serif"
+    fontSize: "18px"
+    fontWeight: 650
+    lineHeight: 1.45
+    letterSpacing: "-0.4px"
   title:
     fontFamily: "Pretendard, -apple-system, BlinkMacSystemFont, Apple SD Gothic Neo, Segoe UI, sans-serif"
     fontSize: "15px"
@@ -201,18 +213,28 @@ components:
 
 ### Hierarchy
 
+글자 크기는 아래 **여섯 단계뿐**이다: 12 · 14 · 15 · 18 · 21 · 29.
+
 - **Display** (750, 29px, 1.3, -1.2px): 페이지 제목. 화면마다 하나.
+- **Subhead** (700, 21px, 1.35, -0.6px): 상세 드로어 제목, 좁은 화면의 페이지 제목, 본문 Markdown의 h1.
+- **Section** (650, 18px, 1.45, -0.4px): 모달·창 제목, 설정 패널 제목, 본문 Markdown의 h2.
 - **Title** (650, 15px, 1.55, -0.4px): 패널·섹션 제목.
 - **Body** (400, 14px, 1.55): 본문, 표의 주요 셀, 태스크 제목.
 - **Label** (650, 12px): 버튼, 입력, 표 머리, 메뉴 항목.
 - **Caption** (400, 12px, 1.6): 보조 설명, 메타 정보, 상태 칩.
 - **Code** (400, 12px, monospace): PR 번호, 파일 경로, diff.
 
+세 가지만 이 단계 밖에 있고, 글자가 아니기 때문이다.
+
+- **아이콘 글리프**(16·20·22·23·25px): 문자로 그린 기호의 크기다. 읽는 글이 아니다.
+- **브랜드 로고 묶음**(25·26px): 로고와 제품명의 고정 크기다.
+- **좁은 화면의 입력**(16px): 이 값보다 작으면 iOS Safari가 초점에서 화면을 확대한다. 줄이지 않는다.
+
 ### Named Rules
 
 **The 12px Floor Rule.** 어떤 글자도 12px보다 작지 않다. 정보가 넘치면 글자를 줄이지 않고 행을 접거나 보조 정보를 상세로 옮긴다.
 
-**The Weight Not Size Rule.** 같은 크기 안의 강조는 굵기(400→650)로 한다. 강조를 위해 크기 단계를 새로 만들지 않는다.
+**The Weight Not Size Rule.** 같은 크기 안의 강조는 굵기(400→650)로 한다. 강조를 위해 크기 단계를 새로 만들지 않는다. 위 여섯 단계와 세 예외 밖의 값은 `tests/design-tokens.test.ts`가 막는다.
 
 ## Layout
 

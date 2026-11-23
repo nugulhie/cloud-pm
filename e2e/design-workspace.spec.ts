@@ -264,11 +264,12 @@ test("확인이 필요한 작업에서 상세를 열지 않고 담당자를 지�
     githubId: null,
     role: "write",
   };
+  let base: any;
   let task: any;
   let saved: any = null;
   await page.route("**/api/dashboard", async (route) => {
-    const response = await route.fetch();
-    const data = await response.json();
+    if (!base) base = await (await route.fetch()).json();
+    const data = { ...base };
     task ??= {
       ...data.tasks[0],
       data: {
@@ -292,7 +293,7 @@ test("확인이 필요한 작업에서 상세를 열지 않고 담당자를 지�
             reasons: ["담당자 미지정"],
           },
         ];
-    await route.fulfill({ response, json: data });
+    await route.fulfill({ json: data });
   });
   await page.route("**/api/planning/people**", (route) =>
     route.fulfill({ json: { items: [member], nextOffset: null } }),
@@ -336,11 +337,12 @@ test("확인이 필요한 작업에서 상세를 열지 않고 담당자를 지�
 test("서비스 계정이 없는 워크스페이스는 GitHub 담당자로 지정한다", async ({
   page,
 }) => {
+  let base: any;
   let task: any;
   let saved: any = null;
   await page.route("**/api/dashboard", async (route) => {
-    const response = await route.fetch();
-    const data = await response.json();
+    if (!base) base = await (await route.fetch()).json();
+    const data = { ...base };
     task ??= {
       ...data.tasks[0],
       data: {
@@ -364,7 +366,7 @@ test("서비스 계정이 없는 워크스페이스는 GitHub 담당자로 지�
             reasons: ["담당자 미지정"],
           },
         ];
-    await route.fulfill({ response, json: data });
+    await route.fulfill({ json: data });
   });
   // No service accounts yet: the queue must still be usable.
   await page.route("**/api/planning/people**", (route) =>
@@ -393,4 +395,97 @@ test("서비스 계정이 없는 워크스페이스는 GitHub 담당자로 지�
   );
   expect(saved.data.assignee).toBe("octo-dev");
   expect(saved.data.assigneeUserId).toBe(null);
+});
+
+test("미할당이 여러 건이면 큐에서 한 번에 담당자를 지정한다", async ({
+  page,
+}) => {
+  const member = {
+    id: "22222222-2222-4222-8222-222222222222",
+    login: "minji",
+    displayName: "박민지",
+    githubLogin: "minji-park",
+    githubId: null,
+    role: "write",
+  };
+  const saves: any[] = [];
+  let base: any;
+  let rows: any[] = [];
+  await page.route("**/api/dashboard", async (route) => {
+    if (!base) base = await (await route.fetch()).json();
+    const data = { ...base };
+    if (!rows.length)
+      rows = [1, 2, 3].map((n) => ({
+        ...data.tasks[0],
+        data: {
+          ...data.tasks[0].data,
+          id: `bulk-${n}`,
+          title: `미할당 작업 ${n}`,
+          assignee: "",
+          assigneeUserId: null,
+          status: "ready",
+          blockedReason: "",
+        },
+        revision: n,
+      }));
+    data.tasks = rows;
+    data.attention = rows
+      .filter((row) => !row.data.assignee)
+      .map((row) => ({
+        task: row.data.id,
+        title: row.data.title,
+        reasons: ["담당자 미지정"],
+      }));
+    await route.fulfill({ json: data });
+  });
+  await page.route("**/api/planning/people**", (route) =>
+    route.fulfill({ json: { items: [member], nextOffset: null } }),
+  );
+  await page.route("**/api/tasks", async (route) => {
+    const body = route.request().postDataJSON();
+    saves.push(body);
+    rows = rows.map((row) =>
+      row.data.id === body.data.id
+        ? { ...row, data: body.data, revision: row.revision + 1 }
+        : row,
+    );
+    await route.fulfill({
+      json: rows.find((row) => row.data.id === body.data.id),
+    });
+  });
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "확인이 필요한 작업" });
+  const bulk = attention.getByRole("combobox", {
+    name: "미할당 3건 담당자 일괄 지정",
+    exact: true,
+  });
+  await expect(bulk).toBeEnabled({ timeout: 30000 });
+  await bulk.selectOption({ label: "박민지 · @minji-park" });
+  // Each row keeps its own answer and its own undo.
+  await expect(attention.locator(".attention-settled")).toHaveCount(3);
+  expect(saves.map((s) => s.data.id).sort()).toEqual([
+    "bulk-1",
+    "bulk-2",
+    "bulk-3",
+  ]);
+  // Each save used that row's own revision, not a shared one.
+  expect(saves.map((s) => s.revision).sort()).toEqual([1, 2, 3]);
+  expect(new Set(saves.map((s) => s.data.assignee))).toEqual(
+    new Set(["minji-park"]),
+  );
+});
+
+test("메뉴는 주소로 열고 뒤로가기로 되돌아간다", async ({ page }) => {
+  await page.goto("/?view=prd");
+  await expect(
+    page.getByRole("button", { name: "PRD 관리", exact: true }),
+  ).toHaveAttribute("aria-current", "page", { timeout: 30000 });
+  await expect(page.locator(".page-heading h1")).toContainText("PRD 관리");
+  await page.getByRole("button", { name: "변경 이력", exact: true }).click();
+  await expect(page).toHaveURL(/\?view=history$/);
+  // 변경 이력 loads its own data, so arriving by URL must load it too.
+  await expect(page.locator(".history-ledger").first()).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\?view=prd$/);
+  await expect(page.locator(".page-heading h1")).toContainText("PRD 관리");
 });

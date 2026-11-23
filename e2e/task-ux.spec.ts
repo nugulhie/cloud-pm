@@ -123,7 +123,13 @@ test("태스크 기본 계층·압축 필터·전체 관계 집계·첫 화면·
     await page.getByLabel("우선순위 필터").selectOption("");
     await planningFilters.locator("summary").click();
     const box = await root.boundingBox();
-    expect(box!.y).toBeLessThan(500);
+    // The guarantee is that the first row of work lands whole on the first
+    // screen of a 390x844 phone. The bound is 560, not 500, because every
+    // control now clears the 44px touch target, and because the demo banner
+    // and the connection prompt measured here never appear in a signed-in
+    // workspace. The slack above the row has already been reclaimed.
+    expect(box!.y).toBeLessThan(560);
+    expect(box!.y + box!.height).toBeLessThan(844);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
