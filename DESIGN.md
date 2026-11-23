@@ -13,7 +13,7 @@ colors:
   surface: "#ffffff"
   ink: "#1c2d3e"
   heading-ink: "#18334c"
-  muted-ink: "#667689"
+  muted-ink: "#5f6f82"
   hairline: "#e1e7ed"
   control-line: "#d7e0e9"
   nav-ink: "#c4d2df"
@@ -24,6 +24,8 @@ colors:
   attention-wash: "#fff6eb"
   danger-red: "#b53d43"
   danger-wash: "#fff2f2"
+  info-blue: "#2b5e9f"
+  info-wash: "#edf4fd"
 typography:
   display:
     fontFamily: "Pretendard, -apple-system, BlinkMacSystemFont, Apple SD Gothic Neo, Segoe UI, sans-serif"
@@ -169,7 +171,7 @@ components:
 - **Canvas** (`canvas`): 본문 영역 배경.
 - **Surface** (`surface`): 패널·표·입력·보조 버튼 배경.
 - **Ink** (`ink`): 본문 글자. 제목은 조금 더 푸른 **Heading Ink**(`heading-ink`).
-- **Muted Ink** (`muted-ink`): 보조 설명·메타 정보·빈 상태 문구.
+- **Muted Ink** (`muted-ink`): 보조 설명·메타 정보·빈 상태 문구. Canvas 위에서도 4.5:1 이상을 유지하는 가장 밝은 값이다.
 - **Hairline** (`hairline`): 패널 테두리와 행 구분선. 입력·보조 버튼은 한 단계 짙은 **Control Line**(`control-line`).
 - **Nav Ink / Nav Label** (`nav-ink`, `nav-label`): 네이비 위의 메뉴 글자와 그룹 라벨.
 
@@ -178,6 +180,8 @@ components:
 - **Done Green** on **Done Wash**: 완료 상태.
 - **Attention Amber** on **Attention Wash**: 차단·확인 필요·지연 같은 개입 신호.
 - **Danger Red** on **Danger Wash**: 삭제·실패·되돌릴 수 없는 작업.
+- **Info Blue** on **Info Wash**: 진행 중 상태와 PR 같은 참조 배지.
+- GitHub의 merged 표시만 GitHub 고유의 보라를 유지한다. 사용자가 GitHub에서 보던 의미와 일치시키기 위한 예외이며 다른 곳에는 쓰지 않는다.
 - 태스크 단계(backlog·ready·in_progress·in_review·done·canceled)는 각각 옅은 배경과 짙은 글자 쌍으로 표시한다. 단계 색은 상태 칩·상태 선택 상자에서만 쓴다.
 
 ### Named Rules
@@ -292,3 +296,4 @@ components:
 - **Don't** 로고 파랑(`soldoc-blue`) 위에 흰 글자를 올리지 않는다.
 - **Don't** 주황을 글자색이나 넓은 배경으로 쓰지 않는다.
 - **Don't** 컴포넌트 CSS에 새 hex 값이나 4·6·8·10px 밖의 모서리 반경을 직접 쓰지 않는다.
+- **Don't** 둥근 상자 한쪽에만 강조선을 두지 않는다. 전체 1px 테두리나 배경 톤으로 구분한다. 사이드바 활성 메뉴의 주황 표시선만 예외다.

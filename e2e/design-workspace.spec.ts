@@ -6,7 +6,7 @@ async function navigate(page: Page, tab: string) {
   await page.getByRole("button", { name: tab, exact: true }).click();
 }
 
-test("대량 태스크에서도 프로젝트 요약이 먼저 보이고 취소를 완료율에서 제외한다", async ({
+test("대량 태스크에서도 확인 필요 작업이 먼저 보이고 취소를 완료율에서 제외한다", async ({
   page,
 }) => {
   await page.route("**/api/dashboard", async (route) => {
@@ -34,10 +34,14 @@ test("대량 태스크에서도 프로젝트 요약이 먼저 보이고 취소�
   await expect(summary).toContainText("20 / 70개 완료", { timeout: 30000 });
   await expect(summary).toContainText("차단 1개");
   await expect(summary.getByRole("progressbar")).toHaveAttribute("value", "29");
-  expect((await summary.boundingBox())!.y).toBeLessThan(600);
+  // Intervention comes first (PRODUCT.md principle 2); the project ledger follows it.
+  const attention = page.getByRole("region", { name: "확인이 필요한 작업" });
+  const attentionTop = (await attention.boundingBox())!.y;
+  expect(attentionTop).toBeLessThan(600);
+  expect((await summary.boundingBox())!.y).toBeGreaterThan(attentionTop);
   await expect(page.locator(".feature-card")).toHaveCount(6);
   await page.setViewportSize({ width: 390, height: 844 });
-  expect((await summary.boundingBox())!.y).toBeLessThan(650);
+  expect((await attention.boundingBox())!.y).toBeLessThan(844);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

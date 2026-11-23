@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Service } from "../core/service";
-import MarkdownBody from "./markdown-body";
+import MarkdownBody from "./markdown-lazy";
 type Thread = Awaited<ReturnType<Service["listComments"]>>;
 type Comment = Thread["comments"][number];
 export default function TaskDiscussion({

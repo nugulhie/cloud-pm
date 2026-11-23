@@ -1,24 +1,4 @@
 /* Soldoc workbench. Brand colors are from the official soldoc.co.kr wordmark. */
-:root {
-  --brand: #008def;
-  --brand-strong: #006fbf;
-  --brand-soft: #eaf5ff;
-  --brand-orange: #fc7e2f;
-  --navy: #102b46;
-  --navy-deep: #0c233b;
-  --bg: #f4f6f8;
-  --ink: #1c2d3e;
-  --muted: #667689;
-  --surface: #fff;
-  --line: #e1e7ed;
-  --radius: 8px;
-  --control-height: 38px;
-  --accent: var(--brand-strong);
-  --text-muted: var(--muted);
-  --text: var(--ink);
-  --soft: var(--brand-soft);
-  --danger: #b53d43;
-}
 body {
   font-size: 14px;
   line-height: 1.55;
@@ -31,7 +11,7 @@ body {
   padding: 12px 14px;
   margin: 12px 0;
   border: 1px solid #b9d8f0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--brand-soft);
   display: flex;
   align-items: center;
@@ -82,7 +62,7 @@ body {
   padding: 20px;
   margin: 16px 0;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: #fff;
   min-width: 0;
 }
@@ -209,7 +189,7 @@ textarea {
 }
 button,
 .button {
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   transition:
     background 0.15s,
     border-color 0.15s,
@@ -221,8 +201,11 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-  outline: 3px solid #008def66;
-  outline-offset: 3px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sidebar :focus-visible {
+  outline-color: #80ceff;
 }
 button:not(:disabled):hover {
   border-color: #bdcbd9;
@@ -234,8 +217,8 @@ input[type="radio"] {
 input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
-  border-color: #d7e0e9;
-  border-radius: 6px;
+  border-color: var(--control-line);
+  border-radius: var(--radius-md);
   color: var(--ink);
   background: #fff;
 }
@@ -256,13 +239,13 @@ textarea:focus {
   box-shadow: none;
 }
 .button:hover:not(:disabled) {
-  background: #005d9f;
-  border-color: #005d9f;
+  background: var(--brand-deep);
+  border-color: var(--brand-deep);
 }
 .button.secondary {
   background: #fff;
   color: #3f5265;
-  border-color: #d7e0e9;
+  border-color: var(--control-line);
 }
 .button.secondary:hover:not(:disabled) {
   background: #f4f8fc;
@@ -274,7 +257,7 @@ textarea:focus {
   border-color: #efd3d5;
 }
 .button.danger:hover:not(:disabled) {
-  background: #fff2f2;
+  background: var(--danger-soft);
   border-color: #e2a9ae;
 }
 .text-button {
@@ -324,7 +307,7 @@ textarea:focus {
   padding: 12px 10px;
   min-height: 64px;
   border: 1px solid #ffffff21;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: #f2f6fb;
   background: #ffffff08;
   text-align: left;
@@ -338,12 +321,12 @@ textarea:focus {
   background: #008def24;
   border: 1px solid #008def35;
   color: #8ed2ff;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
 }
 .sidebar .workspace small,
 .sidebar-bottom small {
   color: #a9bbcd;
-  font-size: 11px;
+  font-size: 12px;
 }
 .sidebar .online {
   background: var(--brand-orange);
@@ -363,7 +346,7 @@ textarea:focus {
   padding: 0 12px;
   margin: 0 0 6px;
   color: #94abc1;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 1px;
   font-weight: 650;
 }
@@ -376,7 +359,7 @@ textarea:focus {
   gap: 10px;
   margin: 2px 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: #c4d2df;
   font-size: 12px;
@@ -399,7 +382,7 @@ textarea:focus {
   left: 0;
   top: 9px;
   bottom: 9px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   background: var(--brand-orange);
 }
 .sidebar .navigation-icon {
@@ -414,9 +397,9 @@ textarea:focus {
   background: #ffffff14;
   color: #e5edf5;
   border: 0;
-  font-size: 10px;
+  font-size: 12px;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .sidebar .profile-trigger {
   flex: 0 0 auto;
@@ -438,8 +421,8 @@ textarea:focus {
   height: 33px;
   background: #244a67;
   color: #c3e8ff;
-  border-radius: 7px;
-  font-size: 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
 }
 .sidebar .navigation-close {
   color: #dce8f4;
@@ -463,14 +446,14 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 13px;
-  color: #617589;
-  font-size: 11px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .app-topbar .breadcrumb span {
   margin: 0;
 }
 .app-topbar .breadcrumb .breadcrumb-workspace {
-  color: #617589;
+  color: var(--muted);
 }
 .app-topbar .breadcrumb strong {
   font-weight: 550;
@@ -479,7 +462,7 @@ textarea:focus {
 .header-actions {
   gap: 11px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .header-product {
   padding-left: 12px;
@@ -489,7 +472,7 @@ textarea:focus {
 }
 .header-actions .icon-button {
   border-color: transparent;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: transparent;
 }
 .header-actions .icon-button:hover {
@@ -509,7 +492,7 @@ textarea:focus {
 }
 .page-heading h1 {
   margin: 0;
-  color: #18334c;
+  color: var(--heading);
   font-size: 29px;
   font-weight: 750;
   line-height: 1.3;
@@ -521,7 +504,7 @@ textarea:focus {
   width: 5px;
   height: 22px;
   margin-right: 11px;
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
   background: var(--brand-orange);
   vertical-align: -1px;
 }
@@ -542,15 +525,14 @@ textarea:focus {
   margin: 12px 0 16px;
   padding: 8px 12px;
   border: 1px solid #d5e7f5;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: #eef6fc;
   color: #45677f;
-  font-size: 11px;
+  font-size: 12px;
 }
 .connection-bar {
   border-color: var(--line);
-  border-left: 3px solid var(--brand);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: #fff;
 }
 .filters {
@@ -576,8 +558,8 @@ textarea:focus {
 .overview-tools > summary {
   min-height: 38px;
   padding: 8px 13px;
-  border-color: #d7e0e9;
-  border-radius: 6px;
+  border-color: var(--control-line);
+  border-radius: var(--radius-md);
   color: #40576d;
 }
 .section-title h2,
@@ -588,7 +570,7 @@ textarea:focus {
   letter-spacing: -0.4px;
 }
 .section-description {
-  color: #718193;
+  color: var(--muted);
   font-size: 12px;
 }
 .project-overview {
@@ -606,7 +588,7 @@ textarea:focus {
 .projects.project-overview-grid.project-ledger-populated {
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: #fff;
 }
 .project-overview-labels,
@@ -623,8 +605,8 @@ textarea:focus {
   padding: 9px 20px;
   border-bottom: 1px solid var(--line);
   background: #f8fafc;
-  color: #617589;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
   font-weight: 600;
 }
 .project-overview-grid .project-ledger-row {
@@ -653,11 +635,11 @@ textarea:focus {
   flex: 0 0 auto;
   padding: 2px 5px;
   border: 1px solid #d5e7f6;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: #f1f8fe;
   color: #366a92;
   font:
-    550 10px/1.5 ui-monospace,
+    550 12px/1.5 ui-monospace,
     SFMono-Regular,
     monospace;
   letter-spacing: 0.5px;
@@ -689,7 +671,7 @@ textarea:focus {
   margin: 7px 0 6px;
   font-size: 12px;
   line-height: 1.5;
-  color: #5e7386;
+  color: var(--muted);
 }
 .project-ledger-row .project-repositories {
   display: block;
@@ -698,8 +680,8 @@ textarea:focus {
   white-space: nowrap;
   max-width: 100%;
   margin: 0;
-  font-size: 10px;
-  color: #617589;
+  font-size: 12px;
+  color: var(--muted);
 }
 .project-summary-progress {
   min-width: 0;
@@ -710,8 +692,8 @@ textarea:focus {
   align-items: center;
   gap: 8px;
   margin: 0 0 8px;
-  color: #5e7386;
-  font-size: 11px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .project-ledger-row .project-progress-label strong {
   font-size: 17px;
@@ -725,7 +707,7 @@ textarea:focus {
   width: 100%;
   height: 4px;
   border: 0;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   background: #e7eef4;
 }
@@ -734,7 +716,7 @@ textarea:focus {
 }
 .project-ledger-row progress::-webkit-progress-value {
   background: var(--brand);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 .project-ledger-row progress::-moz-progress-bar {
   background: var(--brand);
@@ -742,8 +724,8 @@ textarea:focus {
 .project-summary-progress > small {
   display: block;
   margin-top: 6px;
-  color: #617589;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .project-assignees {
   min-width: 0;
@@ -762,7 +744,7 @@ textarea:focus {
   border-radius: 50%;
   background: #e2eef8;
   color: #315e7e;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 650;
 }
 .project-avatar-stack > span:first-child {
@@ -781,7 +763,7 @@ textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   color: #526d83;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .project-ledger-row .project-summary-meta {
@@ -790,21 +772,21 @@ textarea:focus {
   align-items: flex-start;
   gap: 8px;
   margin: 0;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
-  color: #5e7386;
+  color: var(--muted);
 }
 .project-ledger-row .project-blocked {
   padding: 1px 7px;
   border: 1px solid #f4d7bc;
-  border-radius: 4px;
-  background: #fff6eb;
-  color: #8b4c16;
-  font-size: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--attention-soft);
+  color: var(--attention);
+  font-size: 12px;
   font-weight: 550;
 }
 .project-unblocked {
-  color: #617589;
+  color: var(--muted);
 }
 .project-ledger-row .project-delete {
   position: static;
@@ -862,7 +844,7 @@ textarea:focus {
 .stats .stat > div {
   display: block;
   color: #526a7f;
-  font-size: 11px;
+  font-size: 12px;
 }
 .stats .stat-icon {
   display: none;
@@ -879,14 +861,14 @@ textarea:focus {
 }
 .stats .stat > strong small {
   margin-left: 5px;
-  color: #617589;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
   font-weight: 400;
 }
 .stats .stat p {
   margin: 0;
-  color: #617589;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
   line-height: 1.5;
 }
 .stats .stat.warm > strong {
@@ -897,8 +879,7 @@ textarea:focus {
   margin: 10px 0 22px;
   padding: 16px 18px;
   border: 1px solid #dce8f1;
-  border-left: 3px solid var(--brand);
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: #f7fbff;
 }
 .briefing .briefing-icon {
@@ -906,13 +887,13 @@ textarea:focus {
   height: 27px;
   padding: 4px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: #e4f2fd;
   color: var(--brand-strong);
 }
 .briefing .section-eyebrow {
   color: #47728e;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 .briefing p {
@@ -920,8 +901,8 @@ textarea:focus {
   color: #2d4e66;
 }
 .briefing small {
-  color: #617589;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .attention-list,
 .projects,
@@ -942,20 +923,20 @@ textarea:focus {
 }
 .feature-card {
   box-shadow: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border-color: var(--line);
 }
 .feature-card .text-button {
   color: #265b83;
 }
 .feature-card .feature-icon {
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: #edf4fa;
   color: #688ba6;
 }
 .badge,
 .tag {
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .prd-toolbar,
 .saved-views-bar,
@@ -963,7 +944,7 @@ textarea:focus {
 .management-toolbar,
 .bulk-toolbar {
   border-color: var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: none;
 }
 .saved-views-bar,
@@ -999,14 +980,14 @@ button[aria-pressed="true"]:not(.nav),
 }
 .prd-table-scroll {
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: #fff;
 }
 .prd-table th,
 .task-table th {
   background: #f7f9fc;
-  color: #61768a;
-  font-size: 11px;
+  color: var(--muted);
+  font-size: 12px;
   font-weight: 600;
 }
 .prd-table td,
@@ -1023,7 +1004,7 @@ button[aria-pressed="true"]:not(.nav),
   font-variant-numeric: tabular-nums;
 }
 .knowledge-card {
-  border-radius: 7px;
+  border-radius: var(--radius);
   border-color: var(--line);
   box-shadow: none;
 }
@@ -1032,19 +1013,19 @@ button[aria-pressed="true"]:not(.nav),
 }
 .import-toolbar {
   border-color: #d4e4f1;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: none;
   background: #f7fbfe;
 }
 .empty-state {
-  border-radius: 7px;
+  border-radius: var(--radius);
   border-color: #cfdae5;
   background: #fff;
 }
 .modal,
 .editor-dialog {
-  border-radius: 10px;
-  box-shadow: 0 24px 80px #0c233b26;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-overlay);
 }
 .modal-heading {
   border-bottom-color: var(--line);
@@ -1070,7 +1051,7 @@ button[aria-pressed="true"]:not(.nav),
 }
 .task-detail-drawer {
   border-radius: 0;
-  border-left: 3px solid var(--brand);
+  border-left: 1px solid var(--line);
 }
 .workspace-github-settings,
 .mcp-connection-panel {
@@ -1118,7 +1099,7 @@ button[aria-pressed="true"]:not(.nav),
     padding-inline: 12px;
   }
   .stats .stat p {
-    font-size: 9px;
+    font-size: 12px;
   }
 }
 @media (max-width: 900px) and (min-width: 721px) {
@@ -1206,7 +1187,7 @@ button[aria-pressed="true"]:not(.nav),
     flex: 1;
     min-width: 0;
     gap: 8px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .app-topbar .breadcrumb .breadcrumb-workspace {
     display: none;
@@ -1287,7 +1268,7 @@ button[aria-pressed="true"]:not(.nav),
   .saved-views-bar > .planning-toolbar button {
     min-height: 34px;
     padding: 6px 8px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .task-workspace-toolbar {
     display: grid;
@@ -1322,7 +1303,7 @@ button[aria-pressed="true"]:not(.nav),
     font-size: 12px;
   }
   .project-ledger-row .project-repositories {
-    font-size: 10px;
+    font-size: 12px;
   }
   .project-ledger-row .project-summary-progress {
     grid-column: 1;
@@ -1367,7 +1348,7 @@ button[aria-pressed="true"]:not(.nav),
     font-size: 27px;
   }
   .stats .stat p {
-    font-size: 9px;
+    font-size: 12px;
   }
   .briefing {
     padding: 14px;
@@ -1377,7 +1358,7 @@ button[aria-pressed="true"]:not(.nav),
     font-size: 12px;
   }
   .modal {
-    border-radius: 9px 9px 0 0;
+    border-radius: 10px 10px 0 0;
   }
   .task-detail-drawer {
     border-radius: 0;
@@ -1399,7 +1380,7 @@ button[aria-pressed="true"]:not(.nav),
 /* Overview is a working list, with the context memo after actionable work. */
 .overview-work-lists {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 24px;
   margin: 24px 0 30px;
@@ -1416,14 +1397,14 @@ button[aria-pressed="true"]:not(.nav),
   font-size: 14px;
 }
 .overview-work-lists .section-title > .muted {
-  font-size: 10px;
+  font-size: 12px;
 }
 .overview-work-lists .section-actions {
   gap: 5px;
 }
 .overview-work-lists .section-actions button {
   padding: 4px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .overview-work-lists .attention-row {
   min-height: 82px;
@@ -1435,14 +1416,17 @@ button[aria-pressed="true"]:not(.nav),
   font-size: 13px;
 }
 .overview-work-lists .attention-row small {
-  font-size: 11px;
-  color: #617589;
+  font-size: 12px;
+  color: var(--muted);
 }
 .overview-work-lists .attention-row code {
   display: none;
 }
 .overview-work-lists .attention-row .arrow {
-  color: #7991a3;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
 }
 .overview-work-lists .warning-dot {
   flex: 0 0 auto;
@@ -1456,7 +1440,7 @@ button[aria-pressed="true"]:not(.nav),
   display: block;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: #fff;
 }
 .overview-task-list .overview-task-row {
@@ -1495,7 +1479,7 @@ button[aria-pressed="true"]:not(.nav),
   grid-column: 3;
   grid-row: 1;
   justify-self: end;
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .overview-task-list h3 {
@@ -1520,8 +1504,8 @@ button[aria-pressed="true"]:not(.nav),
   grid-row: 2;
   overflow: hidden;
   margin: 0;
-  color: #617589;
-  font-size: 11px;
+  color: var(--muted);
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1530,7 +1514,7 @@ button[aria-pressed="true"]:not(.nav),
   grid-row: 3;
   margin: 1px 0 0;
   color: #65788a;
-  font-size: 10px;
+  font-size: 12px;
 }
 .overview-work-lists .empty {
   padding: 25px 18px;
@@ -1570,7 +1554,7 @@ button[aria-pressed="true"]:not(.nav),
   font-size: 13px;
 }
 .project-overview-labels {
-  font-size: 11px;
+  font-size: 12px;
 }
 .project-ledger-row .project-goal {
   font-size: 13px;
@@ -1578,7 +1562,7 @@ button[aria-pressed="true"]:not(.nav),
 .project-ledger-row .project-repositories,
 .project-ledger-row .project-people,
 .project-ledger-row .project-summary-meta {
-  font-size: 11px;
+  font-size: 12px;
 }
 .project-ledger-row .project-progress-label {
   font-size: 12px;
@@ -1604,7 +1588,6 @@ button[aria-pressed="true"]:not(.nav),
 .picker-actions button,
 .history-event summary,
 .import-toolbar > strong,
-.calendar-day.today time,
 .task-filter-menu[open] > summary,
 .task-filter-menu > summary > span {
   color: var(--brand-strong);
@@ -1621,18 +1604,19 @@ button[aria-pressed="true"]:not(.nav),
   color: var(--brand-strong);
 }
 .history-mark {
-  background: var(--brand);
+  background: var(--brand-strong);
+  color: #fff;
 }
 .settings-navigation [role="tab"]:focus-visible,
 .settings-panel:focus-visible {
-  outline-color: #008def66;
+  outline-color: var(--focus-ring);
 }
 .overlay {
   backdrop-filter: none;
 }
 .content > footer {
-  color: #617589;
-  font-size: 11px;
+  color: var(--muted);
+  font-size: 12px;
 }
 @media (max-width: 720px) {
   .page-heading {
@@ -1651,7 +1635,7 @@ button[aria-pressed="true"]:not(.nav),
     padding-block: 16px;
   }
   .stats .stat > div {
-    font-size: 11px;
+    font-size: 12px;
   }
   .project-ledger-row .project-goal {
     font-size: 12px;
@@ -1690,7 +1674,7 @@ button[aria-pressed="true"]:not(.nav),
   max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: white;
 }
 .task-timeline-grid {
@@ -1744,8 +1728,8 @@ button[aria-pressed="true"]:not(.nav),
   background: var(--brand-strong);
   color: white;
   border: 0;
-  border-radius: 3px;
-  font-size: 11px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
   padding: 4px;
 }
 .timeline-bar.done {

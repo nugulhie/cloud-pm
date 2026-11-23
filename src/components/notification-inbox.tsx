@@ -150,7 +150,13 @@ export default function NotificationInbox({
                 }
               >
                 <strong>
-                  {!n.read && <span className="live-dot" />} {n.title}
+                  {!n.read && (
+                    <>
+                      <span className="live-dot" aria-hidden="true" />
+                      <span className="sr-only">읽지 않음</span>
+                    </>
+                  )}{" "}
+                  {n.title}
                 </strong>
                 <span>{n.author}</span>
                 <p>{n.body.slice(0, 160)}</p>

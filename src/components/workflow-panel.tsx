@@ -18,7 +18,7 @@ import { draftSaved } from "./draft-boundary";
 import EditorDialog from "./editor-dialog";
 import TaskTimeline from "./task-timeline";
 import ReferencePicker from "./reference-picker";
-import MarkdownBody from "./markdown-body";
+import MarkdownBody from "./markdown-lazy";
 import { taskToday } from "../core/task-date";
 const fieldNames: Record<string, string> = {
   name: "정책·용어명",
@@ -127,20 +127,22 @@ function Changes({ api, project, tasks, canWrite, refresh }: Props) {
           }
         />
       ))}
-      <div className="actions">
-        <button
-          disabled={!offset || action.busy}
-          onClick={() => setOffset(Math.max(0, offset - 20))}
-        >
-          이전 변경
-        </button>
-        <button
-          disabled={query.data?.nextOffset == null || action.busy}
-          onClick={() => setOffset(query.data!.nextOffset!)}
-        >
-          다음 변경
-        </button>
-      </div>
+      {(offset > 0 || query.data?.nextOffset != null) && (
+        <div className="actions">
+          <button
+            disabled={!offset || action.busy}
+            onClick={() => setOffset(Math.max(0, offset - 20))}
+          >
+            이전 변경
+          </button>
+          <button
+            disabled={query.data?.nextOffset == null || action.busy}
+            onClick={() => setOffset(query.data!.nextOffset!)}
+          >
+            다음 변경
+          </button>
+        </div>
+      )}
     </>
   );
 }

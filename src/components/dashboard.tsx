@@ -33,7 +33,7 @@ import ProjectCalendar from "./project-calendar";
 import ImportToolbar from "./import-toolbar";
 import HistoryTimeline from "./history-timeline";
 import AccountPanel from "./account-panel";
-import MarkdownBody from "./markdown-body";
+import MarkdownBody from "./markdown-lazy";
 import ProjectForm from "./project-form";
 import TaskAssigneeSelect from "./task-assignee-select";
 import TaskSprintSelect from "./task-sprint-select";
@@ -88,6 +88,27 @@ const tabs = [
   "검토·릴리스",
   "휴지통",
 ];
+const tabDescriptions: Record<string, string> = {
+  "프로젝트 현황": "차단·지연·미할당 작업과 프로젝트별 진행률을 확인하세요.",
+  "태스크 보드":
+    "담당자와 기한을 확인하고, 하위 작업을 펼쳐 진행 상황을 살펴보세요.",
+  "GitHub 활동":
+    "PR·이슈를 확인하고 필요한 항목을 프로젝트 작업으로 연결하세요.",
+  "변경 이력": "누가 언제 무엇을 바꿨는지 항목별로 확인하세요.",
+  "작업 큐": "GitHub 수집·웹훅 처리 작업의 진행과 실패를 확인하세요.",
+  "항목 관리": "프로젝트·기능·태스크를 찾아 한꺼번에 수정하거나 삭제하세요.",
+  캘린더: "프로젝트 시작일과 종료일을 월별로 확인하세요.",
+  "PRD 관리": "요구사항을 작성하거나 CSV로 가져온 뒤 개발 작업으로 전환하세요.",
+  "정책 저장소": "정책을 관리하고 영향을 받는 PRD·태스크를 확인하세요.",
+  용어집: "팀이 함께 쓰는 용어를 정의하고 쓰인 곳을 확인하세요.",
+  "리소스 계획": "담당자별 가용 시간과 배정된 작업량을 비교하세요.",
+  "백로그·스프린트": "백로그 우선순위를 정하고 스프린트에 작업을 배정하세요.",
+  "담당자 매칭": "가져온 담당자 이름을 서비스 계정에 연결하세요.",
+  "검토·릴리스": "변경 검토와 기획 검수, 마일스톤과 릴리스를 관리하세요.",
+  휴지통: "삭제한 항목을 하위 작업과 함께 복구하세요.",
+};
+const sameJson = (a: unknown, b: unknown) =>
+  JSON.stringify(a) === JSON.stringify(b);
 export default function Dashboard() {
   const [managementKind, setManagementKind] = useState<
     "project" | "feature" | "task"
@@ -426,10 +447,15 @@ export default function Dashboard() {
       try {
         const generation = accountGeneration.current;
         const next = await api("dashboard");
-        if (active && generation === accountGeneration.current) setData(next);
+        // Keep the previous object when nothing changed so the view does not re-render.
+        if (active && generation === accountGeneration.current)
+          setData((previous) => (sameJson(previous, next) ? previous : next));
         if (tab === tabs[4]) {
           const nextJobs = await api("jobs");
-          if (active) setJobs(nextJobs);
+          if (active)
+            setJobs((previous) =>
+              sameJson(previous, nextJobs) ? previous : nextJobs,
+            );
         }
       } catch {
         /* 인증 오류는 수동 새로고침에서 표시한다. */
@@ -979,6 +1005,7 @@ export default function Dashboard() {
                     key={tabs[i]}
                     disabled={!data}
                     aria-label={tabs[i]}
+                    aria-describedby={i === 1 ? "nav-task-count" : undefined}
                     aria-current={tab === tabs[i] ? "page" : undefined}
                     className={tab === tabs[i] ? "nav active" : "nav"}
                     onClick={() => {
@@ -994,7 +1021,13 @@ export default function Dashboard() {
                   >
                     <NavigationIcon index={i} />
                     <span className="nav-text">{tabs[i]}</span>
-                    {i === 1 && <em>{data?.tasks.length ?? 0}</em>}
+                    {i === 1 && (
+                      <em id="nav-task-count">
+                        <span className="sr-only">태스크 </span>
+                        {data?.tasks.length ?? 0}
+                        <span className="sr-only">개</span>
+                      </em>
+                    )}
                   </button>
                 ))}
               </div>
@@ -1089,20 +1122,12 @@ export default function Dashboard() {
             <div className="page-heading">
               <div>
                 <h1>{tab}</h1>
-                <p>
-                  {tab === tabs[2]
-                    ? "PR·이슈를 확인하고 필요한 항목을 프로젝트 작업으로 연결하세요."
-                    : tab === tabs[7]
-                      ? "요구사항을 작성하거나 CSV로 가져온 뒤 개발 작업으로 전환하세요."
-                      : tab === tabs[1]
-                        ? "담당자와 기한을 확인하고, 하위 작업을 펼쳐 진행 상황을 살펴보세요."
-                        : "진행 상황을 이해하고, 다음 행동을 결정하세요."}
-                </p>
+                <p>{tab && tabDescriptions[tab]}</p>
               </div>
               <div className="actions">
                 {tab === tabs[0] && (
                   <button
-                    className="button"
+                    className="button secondary"
                     disabled={!canWrite}
                     onClick={() => setModal("project")}
                   >
@@ -1454,7 +1479,10 @@ export default function Dashboard() {
                   <BacklogSprintPanel
                     key={data.viewer.workspaceId + project}
                     api={api}
-                    project={project}
+                    project={
+                      project ||
+                      (projects.length === 1 ? projects[0]!.data.id : "")
+                    }
                     canWrite={canWrite}
                     tasks={data.tasks}
                     onOpenTask={openTask}
@@ -1495,24 +1523,6 @@ export default function Dashboard() {
                 )}
                 {tab === tabs[0] && (
                   <>
-                    <ProjectOverview
-                      projects={projects}
-                      tasks={tasks}
-                      relatedTasks={data.tasks}
-                      selected={project}
-                      scoped={!!(author || status || search)}
-                      writable={!!canWrite}
-                      busy={busy}
-                      onSelect={(id) => {
-                        setProject(id);
-                        resetFilters();
-                      }}
-                      onManage={() => {
-                        setManagementKind("project");
-                        setTab(tabs[5]);
-                      }}
-                      onDelete={requestProjectDeletion}
-                    />
                     <div className="stats">
                       <Stat
                         title="전체 태스크"
@@ -1575,7 +1585,7 @@ export default function Dashboard() {
                                   <small>{a.reasons.join(" · ")}</small>
                                 </div>
                                 <code>{a.task}</code>
-                                <span className="arrow">↗</span>
+                                <span className="arrow">상세 보기 ›</span>
                               </button>
                             ))
                           ) : (
@@ -1597,6 +1607,26 @@ export default function Dashboard() {
                           </button>
                         )}
                       </section>
+                    </div>
+                    <ProjectOverview
+                      projects={projects}
+                      tasks={tasks}
+                      relatedTasks={data.tasks}
+                      selected={project}
+                      scoped={!!(author || status || search)}
+                      writable={!!canWrite}
+                      busy={busy}
+                      onSelect={(id) => {
+                        setProject(id);
+                        resetFilters();
+                      }}
+                      onManage={() => {
+                        setManagementKind("project");
+                        setTab(tabs[5]);
+                      }}
+                      onDelete={requestProjectDeletion}
+                    />
+                    <div className="overview-work-lists">
                       <section
                         className="overview-tasks"
                         aria-label="최근 태스크"
@@ -2310,7 +2340,7 @@ export default function Dashboard() {
                   </section>
                 )}
                 <footer>
-                  <span className="live-dot" />{" "}
+                  <span className="live-dot" aria-hidden="true" />{" "}
                   {data.syncInProgress
                     ? "GitHub 동기화 진행 중"
                     : freshness.collectedAt
