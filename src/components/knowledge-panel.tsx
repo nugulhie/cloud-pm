@@ -3,7 +3,7 @@ import { draftSaved } from "./draft-boundary";
 import { createId } from "../core/browser-id";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { EditorDialog } from "./requirements-panel";
-import MarkdownBody from "./markdown-body";
+import MarkdownBody from "./markdown-lazy";
 import KnowledgeImpactPanel from "./knowledge-impact-panel";
 import ReferencePicker from "./reference-picker";
 import { policyGraph, policyDependents } from "../core/policy-dependencies";

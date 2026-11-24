@@ -33,7 +33,7 @@ import ProjectCalendar from "./project-calendar";
 import ImportToolbar from "./import-toolbar";
 import HistoryTimeline from "./history-timeline";
 import AccountPanel from "./account-panel";
-import MarkdownBody from "./markdown-body";
+import MarkdownBody from "./markdown-lazy";
 import ProjectForm from "./project-form";
 import TaskAssigneeSelect from "./task-assignee-select";
 import TaskSprintSelect from "./task-sprint-select";
@@ -42,7 +42,7 @@ import BacklogSprintPanel from "./backlog-sprint-panel";
 import AssigneeMappingPanel from "./assignee-mapping-panel";
 import SavedViewsBar from "./saved-views-bar";
 import IssueAssigneeEditor from "./issue-assignee-editor";
-import type { TaskFilters } from "../core/planning-model";
+import type { TaskFilters, PlanningPerson } from "../core/planning-model";
 import FileDiff from "./file-diff";
 import AsanaFileImport from "./asana-file-import";
 import DeleteConfirmation from "./delete-confirmation";
@@ -52,6 +52,22 @@ import type { SyncJob } from "../jobs/queue";
 import type { Service } from "../core/service";
 import type { Task, Project, Feature, Stored, GitHubItem } from "../core/model";
 type Data = Awaited<ReturnType<Service["dashboard"]>>;
+// Someone the queue can hand a task to. Service accounts come first; a
+// workspace with none offers the repository's GitHub users instead, which is
+// the same fallback the task form uses.
+type AssignCandidate = {
+  key: string;
+  label: string;
+  assignee: string;
+  assigneeUserId: string | null;
+};
+// What an owner assignment has to remember to be reversible in place.
+type SettledAssignment = {
+  title: string;
+  label: string;
+  previousAssignee: string;
+  previousUserId: string | null;
+};
 class ApiError extends Error {
   constructor(
     message: string,
@@ -71,6 +87,25 @@ const labels: Record<string, string> = {
   closed: "닫힘",
   merged: "머지 완료",
 };
+// Stable ASCII names for `?view=`, one per entry of `tabs` and in the same
+// order, so a menu can be bookmarked, shared and reached with the back button.
+const tabSlugs = [
+  "overview",
+  "tasks",
+  "github",
+  "history",
+  "jobs",
+  "manage",
+  "calendar",
+  "prd",
+  "policies",
+  "glossary",
+  "resources",
+  "backlog",
+  "assignees",
+  "releases",
+  "trash",
+];
 const tabs = [
   "프로젝트 현황",
   "태스크 보드",
@@ -88,6 +123,33 @@ const tabs = [
   "검토·릴리스",
   "휴지통",
 ];
+const tabForSlug = (slug: string | null) => {
+  const index = slug ? tabSlugs.indexOf(slug) : -1;
+  return index >= 0 ? tabs[index]! : tabs[0]!;
+};
+const slugForTab = (name: string) =>
+  tabSlugs[tabs.indexOf(name)] ?? tabSlugs[0]!;
+const tabDescriptions: Record<string, string> = {
+  "프로젝트 현황": "차단·지연·미할당 작업과 프로젝트별 진행률을 확인하세요.",
+  "태스크 보드":
+    "담당자와 기한을 확인하고, 하위 작업을 펼쳐 진행 상황을 살펴보세요.",
+  "GitHub 활동":
+    "PR·이슈를 확인하고 필요한 항목을 프로젝트 작업으로 연결하세요.",
+  "변경 이력": "누가 언제 무엇을 바꿨는지 항목별로 확인하세요.",
+  "작업 큐": "GitHub 수집·웹훅 처리 작업의 진행과 실패를 확인하세요.",
+  "항목 관리": "프로젝트·기능·태스크를 찾아 한꺼번에 수정하거나 삭제하세요.",
+  캘린더: "프로젝트 시작일과 종료일을 월별로 확인하세요.",
+  "PRD 관리": "요구사항을 작성하거나 CSV로 가져온 뒤 개발 작업으로 전환하세요.",
+  "정책 저장소": "정책을 관리하고 영향을 받는 PRD·태스크를 확인하세요.",
+  용어집: "팀이 함께 쓰는 용어를 정의하고 쓰인 곳을 확인하세요.",
+  "리소스 계획": "담당자별 가용 시간과 배정된 작업량을 비교하세요.",
+  "백로그·스프린트": "백로그 우선순위를 정하고 스프린트에 작업을 배정하세요.",
+  "담당자 매칭": "가져온 담당자 이름을 서비스 계정에 연결하세요.",
+  "검토·릴리스": "변경 검토와 기획 검수, 마일스톤과 릴리스를 관리하세요.",
+  휴지통: "삭제한 항목을 하위 작업과 함께 복구하세요.",
+};
+const sameJson = (a: unknown, b: unknown) =>
+  JSON.stringify(a) === JSON.stringify(b);
 export default function Dashboard() {
   const [managementKind, setManagementKind] = useState<
     "project" | "feature" | "task"
@@ -133,6 +195,34 @@ export default function Dashboard() {
   const [activityLimit, setActivityLimit] = useState(40);
   const [overviewLimit, setOverviewLimit] = useState(6);
   const [attentionLimit, setAttentionLimit] = useState(5);
+  // Candidates for inline assignment, keyed by workspace and project.
+  const [candidatesByProject, setCandidatesByProject] = useState<
+    Record<string, AssignCandidate[]>
+  >({});
+  const [peopleError, setPeopleError] = useState("");
+  const peopleRequested = useRef(new Set<string>());
+  // Opening a menu is a step in the browser's own history.
+  function openTab(name: string) {
+    setTab(name);
+    setNavigationOpen(false);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("view") === slugForTab(name)) return;
+    url.searchParams.set("view", slugForTab(name));
+    window.history.pushState(null, "", url.pathname + url.search + url.hash);
+  }
+  // Assignments awaiting their undo window, keyed by task id.
+  const [settled, setSettled] = useState<Record<string, SettledAssignment>>({});
+  const [lastSettled, setLastSettled] = useState("");
+  const settleTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const undoRef = useRef<HTMLButtonElement | null>(null);
+  const undoFocused = useRef("");
+  useEffect(() => {
+    const timers = settleTimers.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [taskViewing, setTaskViewing] = useState(false);
   const [checkedItems, setCheckedItems] = useState<string[]>([]);
@@ -146,8 +236,10 @@ export default function Dashboard() {
   const accountGeneration = useRef(0);
   const [data, setData] = useState<Data | null>(null),
     [error, setError] = useState(""),
+    // Only what this dialog's own submit produced.
+    [formError, setFormError] = useState(""),
     [busy, setBusy] = useState(false),
-    [tab, setTab] = useState(tabs[0]),
+    [tab, setTab] = useState(tabs[0]!),
     [token, setToken] = useState(""),
     [ready, setReady] = useState(false);
   const [project, setProject] = useState(""),
@@ -305,9 +397,12 @@ export default function Dashboard() {
         try {
           const migration = await api("work-items/migrate", {});
           if (migration.created) next = await api("dashboard");
-        } catch (error) {
+        } catch (migrationError) {
+          // Housekeeping nobody asked for. The dashboard already loaded, so a
+          // failure here is not the reader's error: retry on the next load and
+          // keep it out of the banner that reports their own actions.
           migratedWorkspaces.current.delete(workspace);
-          throw error;
+          console.error("work_items_migration_failed", migrationError);
         }
       }
       if (generation !== accountGeneration.current) return;
@@ -417,6 +512,42 @@ export default function Dashboard() {
     setReady(true);
     void load();
   }, []);
+  // The menu lives in the address bar, so a screen can be bookmarked, sent to
+  // a colleague, and left with the browser's own back button. The URL is read
+  // on load and on back; it is written only by `openTab`, from a real click,
+  // so no effect can race the address the reader arrived with.
+  useEffect(() => {
+    const apply = () =>
+      setTab(
+        tabForSlug(new URL(window.location.href).searchParams.get("view")),
+      );
+    apply();
+    window.addEventListener("popstate", apply);
+    return () => window.removeEventListener("popstate", apply);
+  }, []);
+  // Two screens load their own data. Hanging that off the menu click left a
+  // bookmark or a back step showing an empty screen, so it follows the screen
+  // itself, however the reader got there.
+  useEffect(() => {
+    if (!ready || !data) return;
+    const generation = accountGeneration.current;
+    const path = tab === tabs[3] ? "history" : tab === tabs[4] ? "jobs" : "";
+    if (!path) return;
+    let active = true;
+    void api(path)
+      .then((result) => {
+        if (!active || generation !== accountGeneration.current) return;
+        if (path === "history") setHistory(result);
+        else setJobs(result);
+      })
+      .catch((e) => {
+        if (active && generation === accountGeneration.current)
+          setError((e as Error).message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tab, ready, !data]);
   useEffect(() => {
     if (!ready || modal || selected || profileOpen || boardDragging || deleting)
       return;
@@ -426,10 +557,15 @@ export default function Dashboard() {
       try {
         const generation = accountGeneration.current;
         const next = await api("dashboard");
-        if (active && generation === accountGeneration.current) setData(next);
+        // Keep the previous object when nothing changed so the view does not re-render.
+        if (active && generation === accountGeneration.current)
+          setData((previous) => (sameJson(previous, next) ? previous : next));
         if (tab === tabs[4]) {
           const nextJobs = await api("jobs");
-          if (active) setJobs(nextJobs);
+          if (active)
+            setJobs((previous) =>
+              sameJson(previous, nextJobs) ? previous : nextJobs,
+            );
         }
       } catch {
         /* 인증 오류는 수동 새로고침에서 표시한다. */
@@ -443,16 +579,21 @@ export default function Dashboard() {
       clearInterval(timer);
     };
   }, [ready, modal, selected, tab, profileOpen, boardDragging, deleting]);
+  // A failure belongs where the reader caused it: inside the open dialog, or
+  // in the page banner when none is open. The page banner is hidden while a
+  // dialog is up, so routing by context is what keeps errors visible at all.
   async function act(fn: () => Promise<unknown>) {
     const generation = accountGeneration.current;
+    const report = modal ? setFormError : setError;
     setBusy(true);
     setError("");
+    setFormError("");
     try {
       await fn();
       if (generation === accountGeneration.current) await load();
     } catch (e) {
       if (generation === accountGeneration.current)
-        setError((e as Error).message);
+        report((e as Error).message);
     } finally {
       if (generation === accountGeneration.current) setBusy(false);
     }
@@ -530,6 +671,192 @@ export default function Dashboard() {
   );
   const taskIds = new Set(tasks.map((task) => task.data.id));
   const attention = (data?.attention ?? []).filter((a) => taskIds.has(a.task));
+  const workspaceKey = data?.viewer.workspaceId ?? "main";
+  // The visible attention rows that still have nobody to act on them.
+  const assignableProjects = canWrite
+    ? Array.from(
+        new Set(
+          attention
+            .slice(0, attentionLimit)
+            .filter((a) => a.reasons.includes("담당자 미지정"))
+            .map((a) => tasks.find((t) => t.data.id === a.task)?.data.project)
+            .filter((id): id is string => !!id),
+        ),
+      ).sort()
+    : [];
+  const assignableKey = assignableProjects.join(",");
+  // One picker for the whole queue, but only when every unowned row belongs to
+  // the same project: the candidate list is per project, so a single control
+  // across two of them would offer people who cannot take the work.
+  const unownedRows = attention
+    .slice(0, attentionLimit)
+    .filter((a) => a.reasons.includes("담당자 미지정"))
+    .flatMap((a) => tasks.filter((t) => t.data.id === a.task));
+  const bulkProject =
+    assignableProjects.length === 1 ? assignableProjects[0]! : "";
+  const bulkCandidates = bulkProject
+    ? candidatesByProject[`${workspaceKey}:${bulkProject}`]
+    : undefined;
+  useEffect(() => {
+    if (!assignableKey) return;
+    const generation = accountGeneration.current;
+    for (const project of assignableKey.split(",")) {
+      const key = `${workspaceKey}:${project}`;
+      if (peopleRequested.current.has(key)) continue;
+      peopleRequested.current.add(key);
+      void api(
+        `planning/people?${new URLSearchParams({ project, limit: "100" })}`,
+      )
+        .then(async (result): Promise<AssignCandidate[]> => {
+          const members: PlanningPerson[] = result.items ?? [];
+          if (members.length)
+            return members.map((m) => ({
+              key: m.id,
+              label: `${m.displayName} · @${m.githubLogin ?? m.login}`,
+              assignee: m.githubLogin ?? m.login,
+              assigneeUserId: m.id,
+            }));
+          // No service accounts in this workspace yet, so offer the project's
+          // GitHub users rather than a control nobody can use.
+          const github = await api(
+            `github/assignees?${new URLSearchParams({ project })}`,
+          );
+          const users: { login: string }[] = Array.isArray(github.users)
+            ? github.users
+            : [];
+          return users.map((u) => ({
+            key: `github:${u.login}`,
+            label: `@${u.login} · GitHub`,
+            assignee: u.login,
+            assigneeUserId: null,
+          }));
+        })
+        .then((candidates) => {
+          if (generation === accountGeneration.current)
+            setCandidatesByProject((old) => ({ ...old, [key]: candidates }));
+        })
+        .catch((e) => {
+          // Let the next render retry; the row falls back to opening the task.
+          peopleRequested.current.delete(key);
+          if (generation === accountGeneration.current)
+            setPeopleError((e as Error).message);
+        });
+    }
+  }, [assignableKey, workspaceKey]);
+  // A closed dialog keeps no failure, so reopening it starts clean.
+  useEffect(() => {
+    if (!modal) setFormError("");
+  }, [modal]);
+  // The row the reader just acted on keeps the keyboard, on its undo. The
+  // button is disabled while the save runs, so wait for it to settle, and
+  // move the focus only once per assignment.
+  useEffect(() => {
+    if (!lastSettled || busy || undoFocused.current === lastSettled) return;
+    undoFocused.current = lastSettled;
+    undoRef.current?.focus();
+  }, [lastSettled, busy]);
+  // An assignment answers in the row it was made in, and stays reversible
+  // there, so the reader never scrolls away to learn whether it took.
+  function settleAssignment(id: string, entry: SettledAssignment) {
+    setSettled((old) => ({ ...old, [id]: entry }));
+    setLastSettled(id);
+    const timers = settleTimers.current;
+    clearTimeout(timers.get(id));
+    timers.set(
+      id,
+      setTimeout(() => {
+        timers.delete(id);
+        setSettled(({ [id]: _done, ...rest }) => rest);
+      }, 10000),
+    );
+  }
+  function forgetAssignment(id: string) {
+    clearTimeout(settleTimers.current.get(id));
+    settleTimers.current.delete(id);
+    setSettled(({ [id]: _done, ...rest }) => rest);
+    setLastSettled((current) => (current === id ? "" : current));
+  }
+  async function assignTask(task: Stored<Task>, candidate: AssignCandidate) {
+    setNotice("");
+    await act(async () => {
+      const saved = await api("tasks", {
+        data: {
+          ...task.data,
+          assignee: candidate.assignee,
+          assigneeUserId: candidate.assigneeUserId,
+        },
+        revision: task.revision,
+      });
+      setEditing((current) =>
+        current?.data.id === task.data.id ? saved : current,
+      );
+      settleAssignment(task.data.id, {
+        title: task.data.title,
+        label: candidate.label,
+        previousAssignee: task.data.assignee,
+        previousUserId: task.data.assigneeUserId ?? null,
+      });
+      setNotice(
+        `${task.data.title}: 담당자를 지정했습니다 (${candidate.label}). 되돌리기 버튼으로 취소할 수 있습니다.`,
+      );
+    });
+  }
+  async function assignManyTasks(
+    rows: Stored<Task>[],
+    candidate: AssignCandidate,
+  ) {
+    setNotice("");
+    await act(async () => {
+      // One at a time, each against its own revision, so a stale row fails
+      // on its own instead of taking the batch with it.
+      for (const row of rows) {
+        const saved = await api("tasks", {
+          data: {
+            ...row.data,
+            assignee: candidate.assignee,
+            assigneeUserId: candidate.assigneeUserId,
+          },
+          revision: row.revision,
+        });
+        setEditing((current) =>
+          current?.data.id === row.data.id ? saved : current,
+        );
+        settleAssignment(row.data.id, {
+          title: row.data.title,
+          label: candidate.label,
+          previousAssignee: row.data.assignee,
+          previousUserId: row.data.assigneeUserId ?? null,
+        });
+      }
+      setNotice(
+        `미할당 ${rows.length}건의 담당자를 지정했습니다 (${candidate.label}). 각 행의 되돌리기 버튼으로 취소할 수 있습니다.`,
+      );
+    });
+  }
+  async function undoAssignment(id: string) {
+    const entry = settled[id];
+    if (!entry) return;
+    forgetAssignment(id);
+    setNotice("");
+    await act(async () => {
+      // Read the current revision so undo never fights a newer save.
+      const current = (data?.tasks ?? []).find((t) => t.data.id === id);
+      if (!current)
+        throw new Error(
+          `${entry.title}: 되돌릴 태스크를 찾을 수 없습니다. 태스크 보드에서 확인해 주세요.`,
+        );
+      const saved = await api("tasks", {
+        data: {
+          ...current.data,
+          assignee: entry.previousAssignee,
+          assigneeUserId: entry.previousUserId,
+        },
+        revision: current.revision,
+      });
+      setEditing((row) => (row?.data.id === id ? saved : row));
+      setNotice(`${entry.title}: 담당자 지정을 되돌렸습니다.`);
+    });
+  }
   const destinations: ReturnType<typeof activityDestinations> = data
     ? activityDestinations(data)
     : new Map();
@@ -918,6 +1245,10 @@ export default function Dashboard() {
       }
     >
       <div className="shell">
+        {/* First stop for the keyboard, so the 15-item menu is skippable. */}
+        <a className="skip-link" href="#workspace-main">
+          본문으로 건너뛰기
+        </a>
         <aside
           id="workspace-navigation"
           className={`sidebar${navigationOpen ? " sidebar-open" : ""}`}
@@ -960,7 +1291,7 @@ export default function Dashboard() {
               setDeleteError("");
               setSelected(null);
               setModal(null);
-              setTab(tabs[0]);
+              openTab(tabs[0]!);
               await load();
               setNavigationOpen(false);
             }}
@@ -979,22 +1310,25 @@ export default function Dashboard() {
                     key={tabs[i]}
                     disabled={!data}
                     aria-label={tabs[i]}
+                    aria-describedby={i === 1 ? "nav-task-count" : undefined}
                     aria-current={tab === tabs[i] ? "page" : undefined}
                     className={tab === tabs[i] ? "nav active" : "nav"}
                     onClick={() => {
-                      setTab(tabs[i]!);
+                      openTab(tabs[i]!);
                       setNavigationOpen(false);
                       resetFilters();
                       setNotice("");
-                      if (i === 4)
-                        void act(async () => setJobs(await api("jobs")));
-                      if (i === 3)
-                        void act(async () => setHistory(await api("history")));
                     }}
                   >
                     <NavigationIcon index={i} />
                     <span className="nav-text">{tabs[i]}</span>
-                    {i === 1 && <em>{data?.tasks.length ?? 0}</em>}
+                    {i === 1 && (
+                      <em id="nav-task-count">
+                        <span className="sr-only">태스크 </span>
+                        {data?.tasks.length ?? 0}
+                        <span className="sr-only">개</span>
+                      </em>
+                    )}
                   </button>
                 ))}
               </div>
@@ -1025,7 +1359,11 @@ export default function Dashboard() {
             onClick={() => setNavigationOpen(false)}
           />
         )}
-        <main inert={navigationOpen || undefined}>
+        <main
+          id="workspace-main"
+          tabIndex={-1}
+          inert={navigationOpen || undefined}
+        >
           <header className="app-topbar">
             <button
               className="navigation-trigger icon-button"
@@ -1048,7 +1386,7 @@ export default function Dashboard() {
                   api={api}
                   onOpen={(id, destination) => {
                     if (destination === "jobs") {
-                      setTab(tabs[4]!);
+                      openTab(tabs[4]!);
                       void act(async () => setJobs(await api("jobs")));
                       return;
                     }
@@ -1067,7 +1405,7 @@ export default function Dashboard() {
                       setSummaryPeriod(
                         destination === "summary-week" ? "week" : "day",
                       );
-                      setTab(tabs[13]!);
+                      openTab(tabs[13]!);
                       return;
                     }
                     const task = data.tasks.find((t) => t.data.id === id);
@@ -1089,20 +1427,12 @@ export default function Dashboard() {
             <div className="page-heading">
               <div>
                 <h1>{tab}</h1>
-                <p>
-                  {tab === tabs[2]
-                    ? "PR·이슈를 확인하고 필요한 항목을 프로젝트 작업으로 연결하세요."
-                    : tab === tabs[7]
-                      ? "요구사항을 작성하거나 CSV로 가져온 뒤 개발 작업으로 전환하세요."
-                      : tab === tabs[1]
-                        ? "담당자와 기한을 확인하고, 하위 작업을 펼쳐 진행 상황을 살펴보세요."
-                        : "진행 상황을 이해하고, 다음 행동을 결정하세요."}
-                </p>
+                <p>{tab && tabDescriptions[tab]}</p>
               </div>
               <div className="actions">
                 {tab === tabs[0] && (
                   <button
-                    className="button"
+                    className="button secondary"
                     disabled={!canWrite}
                     onClick={() => setModal("project")}
                   >
@@ -1431,7 +1761,7 @@ export default function Dashboard() {
                     onManageProject={(id) => {
                       setProject(id);
                       setManagementKind("project");
-                      setTab(tabs[5]);
+                      openTab(tabs[5]!);
                     }}
                   />
                 )}
@@ -1454,7 +1784,10 @@ export default function Dashboard() {
                   <BacklogSprintPanel
                     key={data.viewer.workspaceId + project}
                     api={api}
-                    project={project}
+                    project={
+                      project ||
+                      (projects.length === 1 ? projects[0]!.data.id : "")
+                    }
                     canWrite={canWrite}
                     tasks={data.tasks}
                     onOpenTask={openTask}
@@ -1488,31 +1821,13 @@ export default function Dashboard() {
                           workspace: data.viewer.workspaceId,
                           id,
                         });
-                        setTab("PRD 관리");
+                        openTab("PRD 관리");
                       }
                     }}
                   />
                 )}
                 {tab === tabs[0] && (
                   <>
-                    <ProjectOverview
-                      projects={projects}
-                      tasks={tasks}
-                      relatedTasks={data.tasks}
-                      selected={project}
-                      scoped={!!(author || status || search)}
-                      writable={!!canWrite}
-                      busy={busy}
-                      onSelect={(id) => {
-                        setProject(id);
-                        resetFilters();
-                      }}
-                      onManage={() => {
-                        setManagementKind("project");
-                        setTab(tabs[5]);
-                      }}
-                      onDelete={requestProjectDeletion}
-                    />
                     <div className="stats">
                       <Stat
                         title="전체 태스크"
@@ -1557,46 +1872,182 @@ export default function Dashboard() {
                           </h2>
                           <span className="muted">다음 행동이 필요한 작업</span>
                         </div>
+                        {canWrite && unownedRows.length > 1 && (
+                          <div className="attention-bulk">
+                            {bulkProject ? (
+                              <label>
+                                <span className="sr-only">
+                                  미할당 {unownedRows.length}건 담당자 일괄 지정
+                                </span>
+                                <select
+                                  value=""
+                                  disabled={busy || !bulkCandidates?.length}
+                                  onChange={(e) => {
+                                    const picked = bulkCandidates?.find(
+                                      (c) => c.key === e.target.value,
+                                    );
+                                    if (picked)
+                                      void assignManyTasks(unownedRows, picked);
+                                  }}
+                                >
+                                  <option value="">
+                                    미할당 {unownedRows.length}건 모두 지정
+                                  </option>
+                                  {(bulkCandidates ?? []).map((c) => (
+                                    <option key={c.key} value={c.key}>
+                                      {c.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : (
+                              <span className="muted">
+                                미할당 {unownedRows.length}건이 여러 프로젝트에
+                                걸쳐 있습니다. 프로젝트를 하나 고르면 한 번에
+                                지정할 수 있습니다.
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <div className="attention-list">
-                          {attention.length ? (
-                            attention.slice(0, attentionLimit).map((a) => (
+                          {Object.entries(settled).map(([id, entry]) => (
+                            <div
+                              key={`settled-${id}`}
+                              className="attention-row attention-settled"
+                            >
+                              <span className="settled-dot" aria-hidden="true">
+                                ✓
+                              </span>
+                              <div>
+                                <strong>{entry.title}</strong>
+                                <small>담당자 지정: {entry.label}</small>
+                              </div>
                               <button
-                                key={a.task}
-                                className="attention-row"
-                                onClick={() =>
-                                  openTask(
-                                    tasks.find((t) => t.data.id === a.task)!,
-                                  )
-                                }
+                                className="button secondary attention-undo"
+                                disabled={busy}
+                                ref={id === lastSettled ? undoRef : undefined}
+                                onClick={() => void undoAssignment(id)}
                               >
-                                <span className="warning-dot">!</span>
-                                <div>
-                                  <strong>{a.title}</strong>
-                                  <small>{a.reasons.join(" · ")}</small>
-                                </div>
-                                <code>{a.task}</code>
-                                <span className="arrow">↗</span>
+                                되돌리기
                               </button>
-                            ))
-                          ) : (
+                            </div>
+                          ))}
+                          {attention.length ? (
+                            attention.slice(0, attentionLimit).map((a) => {
+                              const row = tasks.find(
+                                (t) => t.data.id === a.task,
+                              )!;
+                              const candidates =
+                                candidatesByProject[
+                                  `${workspaceKey}:${row.data.project}`
+                                ];
+                              return (
+                                <div key={a.task} className="attention-row">
+                                  <button
+                                    className="attention-open"
+                                    onClick={() => openTask(row)}
+                                  >
+                                    <span
+                                      className="warning-dot"
+                                      aria-hidden="true"
+                                    >
+                                      !
+                                    </span>
+                                    <div>
+                                      <strong>{a.title}</strong>
+                                      <small>{a.reasons.join(" · ")}</small>
+                                    </div>
+                                    <code>{a.task}</code>
+                                    <span className="arrow">상세 보기 ›</span>
+                                  </button>
+                                  {canWrite &&
+                                    a.reasons.includes("담당자 미지정") && (
+                                      <label className="attention-assign">
+                                        <span className="sr-only">
+                                          {a.title} 담당자 지정
+                                        </span>
+                                        <select
+                                          value=""
+                                          disabled={busy || !candidates?.length}
+                                          onChange={(e) => {
+                                            const picked = candidates?.find(
+                                              (c) => c.key === e.target.value,
+                                            );
+                                            if (picked)
+                                              void assignTask(row, picked);
+                                          }}
+                                        >
+                                          <option value="">
+                                            {!candidates
+                                              ? "담당자 확인 중"
+                                              : candidates.length
+                                                ? "담당자 지정"
+                                                : "지정할 담당자 없음"}
+                                          </option>
+                                          {(candidates ?? []).map((c) => (
+                                            <option key={c.key} value={c.key}>
+                                              {c.label}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                    )}
+                                </div>
+                              );
+                            })
+                          ) : Object.keys(settled).length ? null : (
                             <div className="empty small">
                               확인이 필요한 작업이 없습니다.
                             </div>
                           )}
                         </div>
+                        {peopleError && assignableKey && (
+                          <small className="attention-note" role="alert">
+                            담당자 목록을 불러오지 못해 지정을 쓸 수 없습니다:{" "}
+                            {peopleError}
+                          </small>
+                        )}
                         {attention.length > attentionLimit && (
-                          <button
-                            className="button secondary"
-                            onClick={() =>
-                              setAttentionLimit(attentionLimit + 5)
-                            }
-                          >
-                            확인 필요 태스크 보드에서 전체 보기 (
-                            {Math.min(attentionLimit, attention.length)} /{" "}
-                            {attention.length})
-                          </button>
+                          <div className="attention-more">
+                            <button
+                              className="button secondary"
+                              onClick={() =>
+                                setAttentionLimit(attentionLimit + 5)
+                              }
+                            >
+                              확인 필요 작업{" "}
+                              {Math.min(5, attention.length - attentionLimit)}개
+                              더 보기 ({attentionLimit} / {attention.length})
+                            </button>
+                            <button
+                              className="button secondary"
+                              onClick={() => openTab(tabs[1]!)}
+                            >
+                              태스크 보드에서 전체 보기
+                            </button>
+                          </div>
                         )}
                       </section>
+                    </div>
+                    <ProjectOverview
+                      projects={projects}
+                      tasks={tasks}
+                      relatedTasks={data.tasks}
+                      selected={project}
+                      scoped={!!(author || status || search)}
+                      writable={!!canWrite}
+                      busy={busy}
+                      onSelect={(id) => {
+                        setProject(id);
+                        resetFilters();
+                      }}
+                      onManage={() => {
+                        setManagementKind("project");
+                        openTab(tabs[5]!);
+                      }}
+                      onDelete={requestProjectDeletion}
+                    />
+                    <div className="overview-work-lists">
                       <section
                         className="overview-tasks"
                         aria-label="최근 태스크"
@@ -1609,7 +2060,7 @@ export default function Dashboard() {
                               disabled={!canWrite}
                               onClick={() => {
                                 setManagementKind("task");
-                                setTab(tabs[5]);
+                                openTab(tabs[5]!);
                               }}
                             >
                               수정·삭제 관리
@@ -1674,7 +2125,7 @@ export default function Dashboard() {
                         {tasks.length > overviewLimit && (
                           <button
                             className="button secondary"
-                            onClick={() => setTab(tabs[1])}
+                            onClick={() => openTab(tabs[1]!)}
                           >
                             태스크 보드에서 전체 보기 (
                             {Math.min(overviewLimit, tasks.length)} /{" "}
@@ -2248,7 +2699,7 @@ export default function Dashboard() {
                     )}
                     onManage={() => {
                       setManagementKind("project");
-                      setTab(tabs[5]);
+                      openTab(tabs[5]!);
                     }}
                   />
                 )}
@@ -2310,7 +2761,7 @@ export default function Dashboard() {
                   </section>
                 )}
                 <footer>
-                  <span className="live-dot" />{" "}
+                  <span className="live-dot" aria-hidden="true" />{" "}
                   {data.syncInProgress
                     ? "GitHub 동기화 진행 중"
                     : freshness.collectedAt
@@ -2421,9 +2872,15 @@ export default function Dashboard() {
                     ×
                   </button>
                 </div>
-                {error && (
+                {formError && (
                   <div role="alert" className="alert">
-                    {error}
+                    {formError}
+                    <button
+                      aria-label="오류 닫기"
+                      onClick={() => setFormError("")}
+                    >
+                      ×
+                    </button>
                   </div>
                 )}
                 {modal === "project" ? (
@@ -2445,7 +2902,7 @@ export default function Dashboard() {
                         setNotice(
                           "프로젝트를 만들었습니다. PRD를 작성하거나 작업을 추가해 보세요.",
                         );
-                        setTab(tabs[0]);
+                        openTab(tabs[0]!);
                         setModal(null);
                       });
                     }}

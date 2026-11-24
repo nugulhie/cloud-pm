@@ -2,7 +2,7 @@ import type { GitHubItem, Project, Stored, Task } from "../core/model";
 import { taskTypes } from "../core/model";
 import { TaskAssignee, TaskDueDate, TaskStatusSelect } from "./task-display";
 import TaskGitHubConnections from "./task-github-connections";
-import MarkdownBody from "./markdown-body";
+import MarkdownBody from "./markdown-lazy";
 
 export default function TaskDetail({
   task,

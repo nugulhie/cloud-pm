@@ -15,6 +15,9 @@ export default function ProjectCalendar({
     m = month.getMonth(),
     offset = new Date(year, m, 1).getDay(),
     count = new Date(year, m + 1, 0).getDate();
+  const unscheduled = projects.filter(
+    (p) => !p.data.startDate && !p.data.endDate,
+  );
   const date = (day: number) =>
     `${year}-${String(m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   return (
@@ -48,6 +51,14 @@ export default function ProjectCalendar({
           <button onClick={onManage}>일정 편집</button>
         </div>
       </div>
+      {unscheduled.length > 0 && (
+        <div className="calendar-unscheduled">
+          <p>일정 미설정: {unscheduled.map((p) => p.data.name).join(", ")}</p>
+          <button className="button secondary" onClick={onManage}>
+            일정 설정
+          </button>
+        </div>
+      )}
       <div
         className="calendar-scroll"
         tabIndex={0}
@@ -99,16 +110,6 @@ export default function ProjectCalendar({
         시작일·종료일 중 하나만 지정하면 해당 날짜에 표시됩니다. 일정은 프로젝트
         관리에서 변경할 수 있습니다.
       </p>
-      {projects.filter((p) => !p.data.startDate && !p.data.endDate).length >
-        0 && (
-        <p className="calendar-unscheduled">
-          일정 미설정:{" "}
-          {projects
-            .filter((p) => !p.data.startDate && !p.data.endDate)
-            .map((p) => p.data.name)
-            .join(", ")}
-        </p>
-      )}
     </section>
   );
 }

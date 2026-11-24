@@ -12,7 +12,7 @@ import {
   type IssuePublication,
 } from "../core/requirement-model";
 import type { Stored, Project, Feature, Task } from "../core/model";
-import MarkdownBody from "./markdown-body";
+import MarkdownBody from "./markdown-lazy";
 import type { KnowledgeEntry } from "../core/knowledge-model";
 import ReferencePicker from "./reference-picker";
 import RequirementTasksDialog from "./requirement-tasks-dialog";

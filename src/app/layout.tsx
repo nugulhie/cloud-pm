@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import "./globals.css";
 import "./soldoc-theme.css";
+// Preloaded with metric-adjusted fallbacks so the Korean face swaps in without layout shift.
+const pretendard = localFont({
+  src: "../../public/fonts/PretendardVariable.woff2",
+  weight: "100 900",
+  display: "swap",
+  variable: "--font-pretendard",
+});
 export const metadata: Metadata = {
   title: "솔닥 Cloud PM — 팀 워크스페이스",
   description:
@@ -9,7 +17,7 @@ export const metadata: Metadata = {
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko">
+    <html lang="ko" className={pretendard.variable}>
       <body>{children}</body>
     </html>
   );

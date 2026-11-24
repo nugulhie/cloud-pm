@@ -183,24 +183,26 @@ export default function ResourcePlanPanel({
               이 범위에 배정할 수 있는 워크스페이스 구성원이 없습니다.
             </p>
           )}
-          <div className="actions">
-            <button
-              disabled={offset === 0}
-              onClick={() => setOffset(Math.max(0, offset - 50))}
-            >
-              이전 담당자
-            </button>
-            <span>
-              {query.data.people.total}명 중 {query.data.people.items.length}명
-              표시
-            </span>
-            <button
-              disabled={!query.data.people.hasMore}
-              onClick={() => setOffset(query.data!.people.nextOffset!)}
-            >
-              다음 담당자
-            </button>
-          </div>
+          {(offset > 0 || query.data.people.hasMore) && (
+            <div className="actions">
+              <button
+                disabled={offset === 0}
+                onClick={() => setOffset(Math.max(0, offset - 50))}
+              >
+                이전 담당자
+              </button>
+              <span>
+                {query.data.people.total}명 중 {query.data.people.items.length}
+                명 표시
+              </span>
+              <button
+                disabled={!query.data.people.hasMore}
+                onClick={() => setOffset(query.data!.people.nextOffset!)}
+              >
+                다음 담당자
+              </button>
+            </div>
+          )}
           <div className="planning-summary-list">
             {query.data.people.items.map((row) => (
               <details key={row.person.id}>
